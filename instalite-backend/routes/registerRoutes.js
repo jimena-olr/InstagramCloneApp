@@ -33,6 +33,8 @@ import {
   handleRegister,
   handleSearch,
   handleLogout,
+  handleLikePost,
+  handleUnlikePost,
 
   /* feed / profile / posts */
   handleGetFeed,
@@ -71,12 +73,8 @@ import {
   handleFollowUser,
   handleUnfollowUser,
   handleUserSearch,
-<<<<<<< HEAD
-  handlePostComment
-=======
   handlePostComment,
   handleDeletePost
->>>>>>> 0ee4b4a00e2238b9d0d94da0140423a155be0064
 } from "./routes.js";
 
 /* optional DB helper for raw queries in post upload */
@@ -225,12 +223,10 @@ export default function registerRoutes(app) {
   app.post("/users/:followeeId/follow",   requireSessionAuth, handleFollowUser);
   app.delete("/users/:followeeId/follow", requireSessionAuth, handleUnfollowUser);
 
-<<<<<<< HEAD
   app.post("/post/:postId/like", requireSessionAuth, handleLikePost);
   app.delete("/post/:postId/like", requireSessionAuth, handleUnlikePost);
 
   app.get("/user/:username", requireSessionAuth, handleGetProfileByUsername);
   app.post("/post/comment", requireSessionAuth, handlePostComment);
-=======
->>>>>>> 0ee4b4a00e2238b9d0d94da0140423a155be0064
+
 }

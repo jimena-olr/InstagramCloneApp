@@ -1,4 +1,3 @@
-// src/pages/FriendPage.js
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { resolveAvatar } from "../utils/avatar";
@@ -6,17 +5,16 @@ import { resolveAvatar } from "../utils/avatar";
 export default function FriendPage() {
   const { username } = useParams();
   const [profile, setProfile] = useState(null);
-  const [error, setError]     = useState("");
+  const [error,   setError]   = useState("");
 
-  /* ── fetch public profile on mount / username change ── */
   useEffect(() => {
     async function fetchProfile() {
       try {
-        const res  = await fetch(`http://localhost:3030/user/${username}`, {
-          credentials: "include",
+        const r = await fetch(`http://localhost:3030/user/${username}`, {
+          credentials:"include",
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Could not fetch user.");
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || "Could not fetch user.");
         setProfile(data);
       } catch (err) {
         console.error(err);
@@ -26,26 +24,18 @@ export default function FriendPage() {
     fetchProfile();
   }, [username]);
 
-  if (error)      return <div style={{ color: "red" }}>{error}</div>;
-  if (!profile)   return <p>Loading {username}…</p>;
+  if (error)    return <div style={{ color:"red" }}>{error}</div>;
+  if (!profile) return <p>Loading {username}…</p>;
 
-  /* build absolute URL if server returned a relative path */
-//   const pic = profile.profileImageUrl
-//     ? (profile.profileImageUrl.startsWith("http")
-//         ? profile.profileImageUrl
-//         : `http://localhost:3030${profile.profileImageUrl}`)
-//     : "/public/placeholder_profile_picture.png";
-
-    const pic = resolveAvatar(profile.profileImageUrl, `@${profile.username}`);
+  const avatarSrc = resolveAvatar(profile.profileImageUrl, `@${profile.username}`);
 
   return (
-    <div style={{ padding: "2rem" }}>
-      {/* header */}
+    <div style={{ padding:"2rem" }}>
       <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:24 }}>
-      <img
-        src={pic}
-        alt={`@${profile.username}`}
-        style={{ width:100, height:100, borderRadius:"50%", objectFit:"cover" }}
+        <img
+          src={avatarSrc}
+          alt={`@${profile.username}`}
+          style={{ width:100, height:100, borderRadius:"50%", objectFit:"cover" }}
         />
         <div>
           <h2 style={{ margin:0 }}>@{profile.username}</h2>
@@ -54,7 +44,6 @@ export default function FriendPage() {
         </div>
       </div>
 
-      {/* posts */}
       <h3>Posts</h3>
       {Array.isArray(profile.posts) && profile.posts.length ? (
         profile.posts.map((post) => {
