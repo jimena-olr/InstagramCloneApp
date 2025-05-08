@@ -665,3 +665,25 @@ export async function handleGetProfileByUsername(req, res) {
   }
 }
 
+export async function handlePostComment(req, res) {
+  const userId = req.session?.user?.userId;
+  const { postId, content } = req.body;
+
+  if (!userId || !postId || !content) {
+    return res.status(400).json({ error: "Missing fields" });
+  }
+
+  try {
+    const db = get_db_connection();
+    await db.send_sql(
+      `INSERT INTO comments (post_id, user_id, text_content)
+       VALUES (?, ?, ?)`,
+      [postId, userId, content]
+    );
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    console.error("handlePostComment error:", err);
+    return res.status(500).json({ error: "Failed to submit comment" });
+  }
+}
+

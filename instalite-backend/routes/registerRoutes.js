@@ -52,7 +52,8 @@ import {
   /* user search/follow */
   handleFollowUser,
   handleUnfollowUser,
-  handleUserSearch
+  handleUserSearch,
+  handlePostComment
 } from "./routes.js";
 
 /* optional DB helper for raw queries in post upload */
@@ -199,5 +200,5 @@ export default function registerRoutes(app) {
   app.delete("/post/:postId/like", requireSessionAuth, handleUnlikePost);
 
   app.get("/user/:username", requireSessionAuth, handleGetProfileByUsername);
-
+  app.post("/post/comment", requireSessionAuth, handlePostComment);
 }
