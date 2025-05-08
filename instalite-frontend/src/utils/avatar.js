@@ -19,8 +19,8 @@ export function resolveAvatar(profileImageUrl, handle) {
   }
 
   /* 2) otherwise pick a default based on the username prefix */
-  if (handle.startsWith("bluesky_"))   return "/bluesky.png";
-  if (handle.startsWith("federated_")) return "/federated.png";
+  if (handle.startsWith("@bluesky_"))   return "/bluesky.png";
+  if (handle.startsWith("@federated_")) return "/federated.png";
 
   /* 3) plain placeholder */
   return "/placeholder_profile_picture.png";

@@ -230,4 +230,3 @@ export async function getPostsForUser(userId) {
     return { error: "Failed to retrieve ranked posts" };
   }
 }
-

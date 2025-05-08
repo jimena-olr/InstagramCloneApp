@@ -26,6 +26,7 @@ export default function UserSearchPage() {
         return res.json();
       })
       .then(data => {
+        // now data items include .profileImageUrl
         setResults(Array.isArray(data) ? data : []);
       })
       .catch(() => {
@@ -93,6 +94,7 @@ export default function UserSearchPage() {
             username={user.username}
             firstName={user.firstName}
             lastName={user.lastName}
+            profileImageUrl={user.profileImageUrl}      // ← pass this in
             initiallyFollowing={user.initiallyFollowing}
           />
         ))}

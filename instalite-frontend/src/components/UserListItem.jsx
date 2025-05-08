@@ -1,12 +1,14 @@
-// src/components/UserListItem.js
+// src/components/UserListItem.jsx
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { resolveAvatar } from '../utils/avatar';
 
 export default function UserListItem({
   userId,
   username,
   firstName,
   lastName,
+  profileImageUrl,         // ← new prop
   initiallyFollowing = false
 }) {
   const [following, setFollowing] = useState(initiallyFollowing);
@@ -14,7 +16,8 @@ export default function UserListItem({
   const [hovered, setHovered]     = useState(false);
   const [focused, setFocused]     = useState(false);
 
-  const profileImageUrl = `http://localhost:3030/users/${userId}/image`;
+  // reuse the same helper that your feed uses:
+  const avatarSrc = resolveAvatar(profileImageUrl, `@${username}`);
 
   const handleToggleFollow = async () => {
     if (busy) return;
@@ -34,7 +37,6 @@ export default function UserListItem({
   };
 
   const buttonLabel = busy ? '…' : (following ? 'Unfollow' : 'Follow');
-
   const buttonStyle = {
     marginLeft: 16,
     padding: '6px 12px',
@@ -64,7 +66,6 @@ export default function UserListItem({
         boxSizing: 'border-box'
       }}
     >
-      {/* Left side: clickable, takes all available space */}
       <Link
         to={`/user/${username}`}
         style={{
@@ -73,11 +74,11 @@ export default function UserListItem({
           textDecoration: 'none',
           color: 'inherit',
           flex: 1,
-          minWidth: 0  // <-- allow child to shrink
+          minWidth: 0
         }}
       >
         <img
-          src={profileImageUrl}
+          src={avatarSrc}
           alt={username}
           style={{
             width: 40,
@@ -114,7 +115,6 @@ export default function UserListItem({
         </div>
       </Link>
 
-      {/* Follow/Unfollow button */}
       <button
         onClick={handleToggleFollow}
         disabled={busy}

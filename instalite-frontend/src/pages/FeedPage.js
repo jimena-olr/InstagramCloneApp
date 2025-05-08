@@ -218,7 +218,7 @@ export default function FeedPage() {
                 onKeyDown={e => e.key === "Enter" && handleSubmitComment(post.postId)}
                 style={{ marginTop:6, width:"100%", padding:"6px" }}/>
               
-              {post.author.toLowerCase() === currentUsername.toLowerCase() && (
+              {post.author?.toLowerCase() === currentUsername?.toLowerCase() && (
                 <button onClick={() => handleDeletePost(post.postId)}
                         style={{ marginTop:6, background:"#ffdddd",
                                  border:"1px solid #ffaaaa", color:"#aa0000",
