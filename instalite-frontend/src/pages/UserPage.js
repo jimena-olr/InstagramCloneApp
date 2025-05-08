@@ -57,21 +57,19 @@ export default function UserPage() {
         body: JSON.stringify({ postId, content }),
       });
       if (!res.ok) throw new Error((await res.json()).error || "Failed to post comment");
-
-      setProfile((prev) => {
-        const updated = { ...prev };
-        const post    = updated.posts.find((x) => x.postId === postId);
-        post.comments = [
-          ...(post.comments || []),
-          { username: updated.username, text: content, timestamp: new Date().toISOString() }
-        ];
-        return updated;
+  
+      // ✅ Instead of mutating local state, re-fetch the updated profile
+      const refreshed = await fetch("http://localhost:3030/user", {
+        method: "POST",
+        credentials: "include",
       });
+      const data = await refreshed.json();
+      setProfile(data);
       setCommentInputs((prev) => ({ ...prev, [postId]: "" }));
     } catch (err) {
       console.error("Failed to post comment:", err);
     }
-  };
+  };  
 
   /* ──────────────────────────  delete post helper  ───────────────────────────── */
   const handleDeletePost = async (postId) => {
@@ -92,49 +90,59 @@ export default function UserPage() {
     }
   };
 
-  /* ───────────────────────────────  like toggle  ─────────────────────────────── */
-  const handleToggleLike = async (postId) => {
-    // optimistic UI
+  /* ───────────────────────────────  like toggle  ─────────────────────────────── */const handleToggleLike = async (postId) => {
+  const wasLiked = profile.posts.find((p) => p.postId === postId)?.liked;
+  const method = wasLiked ? "DELETE" : "POST";
+
+  // Optimistic UI update
+  setProfile((prev) => ({
+    ...prev,
+    posts: prev.posts.map((p) =>
+      p.postId === postId
+        ? {
+            ...p,
+            liked: !wasLiked,
+            likeCount: p.likeCount + (wasLiked ? -1 : 1),
+          }
+        : p
+    ),
+  }));
+
+  try {
+    const res = await fetch(`http://localhost:3030/post/${postId}/like`, {
+      method,
+      credentials: "include",
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Like failed");
+
+    // Sync with server response
     setProfile((prev) => ({
       ...prev,
       posts: prev.posts.map((p) =>
         p.postId === postId
-          ? { ...p, liked: !p.liked, likeCount: p.likeCount + (p.liked ? -1 : 1) }
+          ? { ...p, liked: data.liked, likeCount: data.likeCount }
           : p
       ),
     }));
+  } catch (err) {
+    console.error("Like toggle failed:", err);
 
-    const post     = profile.posts.find((p) => p.postId === postId);
-    const method   = post.liked ? "DELETE" : "POST";
-
-    try {
-      const res   = await fetch(`http://localhost:3030/post/${postId}/like`, {
-        method,
-        credentials: "include",
-      });
-      const data  = await res.json();
-      if (!res.ok) throw new Error(data.error || "Like failed");
-
-      /* use server‑truth values */
-      setProfile((prev) => ({
-        ...prev,
-        posts: prev.posts.map((p) =>
-          p.postId === postId ? { ...p, liked: data.liked, likeCount: data.likeCount } : p
-        ),
-      }));
-    } catch (err) {
-      console.error("Like toggle failed:", err);
-      // rollback
-      setProfile((prev) => ({
-        ...prev,
-        posts: prev.posts.map((p) =>
-          p.postId === postId
-            ? { ...p, liked: post.liked, likeCount: post.likeCount }
-            : p
-        ),
-      }));
-    }
-  };
+    // Rollback on failure
+    setProfile((prev) => ({
+      ...prev,
+      posts: prev.posts.map((p) =>
+        p.postId === postId
+          ? {
+              ...p,
+              liked: wasLiked,
+              likeCount: p.likeCount + (wasLiked ? 1 : -1),
+            }
+          : p
+      ),
+    }));
+  }
+};
 
   /* ────────────────────────────────  render  ─────────────────────────────────── */
   if (error)     return <div style={{ color: "red" }}>{error}</div>;

@@ -11,9 +11,9 @@
     "start-chatbot": "node chatbot/chatbot.js"
   },
   "dependencies": {
-    "@langchain/community": "^0.0.15",
+    "@langchain/community": "^0.3.42",
     "@langchain/core": "^0.3.45",
-    "@langchain/openai": "^0.5.6",
+    "@langchain/openai": "^0.5.10",
     "aws-sdk": "^2.1692.0",
     "axios": "^1.8.4",
     "bcrypt": "^5.1.1",

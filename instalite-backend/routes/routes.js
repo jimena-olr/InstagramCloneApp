@@ -17,7 +17,10 @@ import {
 import bcrypt from "bcrypt";
 
 import { getIO } from "../../server/chat/websocket.js";
+import { searchUsersByQuery, searchPostsByQuery } from "../../server/models/rag_helpers.js"; 
 import { get_db_connection } from "../../server/models/rdbms.js";
+import { likePost, unlikePost } from "../../posts.js";
+
 
 import {
   createChat,
@@ -34,7 +37,7 @@ import {
 } from "../../server/chat/chat.js";
 
 import { getMutualsForUser } from "../../friends.js";
-import { getPostsByUser, getPostsForUser } from "../../posts.js";
+import { getPostsByUser, getPostsForUser, deletePost } from "../../posts.js";
 
 /* ---- chatbot helpers ---- */
 import { callChatbot } from "../../chatbot/chatbot.js";
@@ -351,25 +354,16 @@ export async function handleGetInvites(req, res) {
 /* ------------------------------------------------------------------ */
 export async function handleGetUserImage(req, res) {
   const userId = Number(req.params.userId);
-  // 1) load from DB
+  // 1) fetch from DB
   const u = await getUserById(userId);
+  // 2) if they have a saved URL, send that; otherwise fallback
+  const imageUrl = u.profile_image_url || "/public/placeholder_profile_picture.png";
 
-  // 2) if no user, immediately show the placeholder
-  if (!u) {
-    return res.redirect("/public/placeholder_profile_picture.png");
-  }
-
-  // 3) safe to read u.profile_image_url now
-  const imageUrl = u.profile_image_url
-    ? u.profile_image_url
-    : "/public/placeholder_profile_picture.png";
-
-  // 4) if it’s an absolute URL, redirect there
+  // 3) if it’s an absolute S3/HTTP URL, redirect directly
   if (imageUrl.startsWith("http")) {
     return res.redirect(imageUrl);
   }
-  
-  // 5) otherwise it’s local—serve from your static folder
+  // otherwise it’s a local path under your static server
   return res.redirect(`http://localhost:3030${imageUrl}`);
 }
 
@@ -568,47 +562,34 @@ export async function handleGetUserById(req, res) {
   });
 }
 
-export async function handleLikePost(req, res) {
-  const userId = req.session.user.userId;
-  const postId = Number(req.params.postId);
-  if (!postId) return res.status(400).json({ error: "Invalid postId" });
+export async function handlePostComment(req, res) {
+  const userId = req.session?.user?.userId;
+  const { postId, content } = req.body;
+
+  if (!userId || !postId || !content) {
+    return res.status(400).json({ error: "Missing fields" });
+  }
 
   try {
     const db = get_db_connection();
     await db.send_sql(
-      `INSERT IGNORE INTO post_likes (user_id, post_id) VALUES (?, ?)`,
-      [userId, postId]
+      `INSERT INTO comments (post_id, user_id, text_content)
+       VALUES (?, ?, ?)`,
+      [postId, userId, content]
     );
-    const [[{ likeCount }]] = await db.send_sql(
-      `SELECT COUNT(*) AS likeCount FROM post_likes WHERE post_id = ?`,
-      [postId]
-    );
-    return res.json({ success: true, likeCount, liked: true });
+    return res.status(200).json({ success: true });
   } catch (err) {
-    console.error("handleLikePost error:", err);
-    return res.status(500).json({ error: "Failed to like post" });
+    console.error("handlePostComment error:", err);
+    return res.status(500).json({ error: "Failed to submit comment" });
   }
 }
 
-export async function handleUnlikePost(req, res) {
-  const userId = req.session.user.userId;
+export async function handleDeletePost(req, res) {
+  const userId = req.session?.user?.userId;
   const postId = Number(req.params.postId);
-  if (!postId) return res.status(400).json({ error: "Invalid postId" });
 
-  try {
-    const db = get_db_connection();
-    await db.send_sql(
-      `DELETE FROM post_likes WHERE user_id = ? AND post_id = ?`,
-      [userId, postId]
-    );
-    const [[{ likeCount }]] = await db.send_sql(
-      `SELECT COUNT(*) AS likeCount FROM post_likes WHERE post_id = ?`,
-      [postId]
-    );
-    return res.json({ success: true, likeCount, liked: false });
-  } catch (err) {
-    console.error("handleUnlikePost error:", err);
-    return res.status(500).json({ error: "Failed to unlike post" });
+  if (!userId || !postId) {
+    return res.status(400).json({ error: "Missing user or post ID" });
   }
 }
 
@@ -687,3 +668,19 @@ export async function handlePostComment(req, res) {
   }
 }
 
+
+export async function handleDeletePost(req, res) {
+  const userId = req.session?.user?.userId;
+  const postId = Number(req.params.postId);
+
+  if (!userId || !postId) {
+    return res.status(400).json({ error: "Missing user or post ID" });
+  }
+
+  const result = await deletePost(postId, userId);
+  if (result.error) {
+    return res.status(403).json({ error: result.error });
+  }
+
+  return res.json({ success: true });
+}

@@ -117,39 +117,57 @@ export default function FeedPage() {
 
   /* ─────────────────────────────── like toggle ─────────────────────────────── */
   const handleToggleLike = async (postId) => {
+    const post = posts.find((p) => p.postId === postId);
+    const wasLiked = post?.liked;
+  
+    // Optimistic UI update
     setPosts((prev) =>
       prev.map((p) =>
-        p.postId === postId ? { ...p, liked: !p.liked, likeCount: p.likeCount + (p.liked ? -1 : 1) } : p
+        p.postId === postId
+          ? {
+              ...p,
+              liked: !wasLiked,
+              likeCount: p.likeCount + (wasLiked ? -1 : 1),
+            }
+          : p
       )
     );
-
-    const post   = posts.find((p) => p.postId === postId);
-    const method = post.liked ? "DELETE" : "POST";
-
+  
+    const method = wasLiked ? "DELETE" : "POST";
+  
     try {
-      const res  = await fetch(`http://localhost:3030/post/${postId}/like`, {
-        method, credentials: "include",
+      const res = await fetch(`http://localhost:3030/post/${postId}/like`, {
+        method,
+        credentials: "include",
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Like failed");
-
-      /* sync UI with server truth */
+  
+      // Confirm with server response
       setPosts((prev) =>
         prev.map((p) =>
-          p.postId === postId ? { ...p, liked: data.liked, likeCount: data.likeCount } : p
+          p.postId === postId
+            ? { ...p, liked: data.liked, likeCount: data.likeCount }
+            : p
         )
       );
     } catch (err) {
       console.error("Like toggle failed:", err);
-      // rollback
+      // Rollback on error
       setPosts((prev) =>
         prev.map((p) =>
-          p.postId === postId ? { ...p, liked: post.liked, likeCount: post.likeCount } : p
+          p.postId === postId
+            ? {
+                ...p,
+                liked: wasLiked,
+                likeCount: p.likeCount + (wasLiked ? 1 : -1),
+              }
+            : p
         )
       );
     }
   };
-
+  
   /* ────────────────────────────────  render  ───────────────────────────────── */
   if (loading) return <p>Loading posts...</p>;
   if (error)   return <div style={{ color: "red" }}>{error}</div>;
