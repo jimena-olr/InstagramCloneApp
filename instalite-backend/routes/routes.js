@@ -357,6 +357,10 @@ export async function handleGetUserImage(req, res) {
   // 1) fetch from DB
   const u = await getUserById(userId);
   // 2) if they have a saved URL, send that; otherwise fallback
+  if (!u) {
+    return res.redirect("/public/placeholder_profile_picture.png");
+  }
+
   const imageUrl = u.profile_image_url || "/public/placeholder_profile_picture.png";
 
   // 3) if it’s an absolute S3/HTTP URL, redirect directly

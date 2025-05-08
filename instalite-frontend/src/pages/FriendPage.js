@@ -10,12 +10,11 @@ export default function FriendPage() {
   useEffect(() => {
     async function fetchProfile() {
       try {
-        const r = await fetch(`http://localhost:3030/user/${username}`, {
-          credentials:"include",
-        });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error || "Could not fetch user.");
-        setProfile(data);
+        const r = await fetch(`http://localhost:3030/user/${username}`,
+                              { credentials:"include" });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        setProfile(d);
       } catch (err) {
         console.error(err);
         setError("Failed to load user.");
@@ -24,19 +23,17 @@ export default function FriendPage() {
     fetchProfile();
   }, [username]);
 
-  if (error)    return <div style={{ color:"red" }}>{error}</div>;
+  if (error)    return <p style={{ color:"red" }}>{error}</p>;
   if (!profile) return <p>Loading {username}…</p>;
 
-  const avatarSrc = resolveAvatar(profile.profileImageUrl, `@${profile.username}`);
+  const avatar = resolveAvatar(profile.profileImageUrl, `@${profile.username}`);
 
   return (
     <div style={{ padding:"2rem" }}>
+      {/* header */}
       <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:24 }}>
-        <img
-          src={avatarSrc}
-          alt={`@${profile.username}`}
-          style={{ width:100, height:100, borderRadius:"50%", objectFit:"cover" }}
-        />
+        <img src={avatar} alt={`@${profile.username}`}
+             style={{ width:100, height:100, borderRadius:"50%", objectFit:"cover" }}/>
         <div>
           <h2 style={{ margin:0 }}>@{profile.username}</h2>
           <p style={{ margin:0 }}>Followers: {profile.followerCount}</p>
@@ -44,9 +41,10 @@ export default function FriendPage() {
         </div>
       </div>
 
+      {/* posts */}
       <h3>Posts</h3>
       {Array.isArray(profile.posts) && profile.posts.length ? (
-        profile.posts.map((post) => {
+        profile.posts.map(post => {
           const imgSrc = post.imageUrl
             ? (post.imageUrl.startsWith("http")
                 ? post.imageUrl
@@ -59,7 +57,7 @@ export default function FriendPage() {
               <p>{post.text}</p>
               {imgSrc && (
                 <img src={imgSrc} alt="post"
-                     style={{ maxWidth:"100%", marginTop:8 }} />
+                     style={{ maxWidth:"100%", marginTop:8 }}/>
               )}
               <div style={{ marginTop:4, fontSize:"0.85rem" }}>
                 ❤️ {post.likeCount || 0} likes

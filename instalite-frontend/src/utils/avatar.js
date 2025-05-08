@@ -1,25 +1,27 @@
-// instalite-frontend/src/utils/avatar.js
-const BACKEND = "http://localhost:3030";
+// instalite‑frontend/src/utils/avatar.js
+//
+// Central helper that turns whatever we know about the user
+// into a URL the <img/> tag can actually load.
+//
 
 /**
- * Decide which avatar URL to use.
- *
- * @param {string|null} profileImageUrl – value from DB (may be null / "")
- * @param {string} handle               – "@username"  (you already have this)
- * @returns {string} fully‑qualified URL
+ * @param {string|null|undefined} profileImageUrl  value coming from the DB
+ * @param {string}                handle           e.g. “@bluesky_foo”
+ * @returns {string}  absolute URL that the browser can load
  */
 export function resolveAvatar(profileImageUrl, handle) {
-  // 1) user has explicitly chosen a photo → use it
-  if (profileImageUrl && profileImageUrl.trim() !== "") {
-    return profileImageUrl.startsWith("http")
-      ? profileImageUrl                       // absolute URL (e.g. S3)
-      : `${BACKEND}${profileImageUrl}`;       // stored as "/uploads/…"
+  /* 1) did we already store a real picture for this user? */
+  if (profileImageUrl) {
+    // absolute URL → leave as‑is
+    if (/^https?:\/\//i.test(profileImageUrl)) return profileImageUrl;
+    // relative path coming from the backend
+    return `http://localhost:3030${profileImageUrl}`;
   }
 
-  // 2) no custom photo → infer from handle prefix
-  if (handle.startsWith("@bluesky_"))  return `${BACKEND}/public/bluesky.png`;
-  if (handle.startsWith("@federated_")) return `${BACKEND}/public/federated.png`;
+  /* 2) otherwise pick a default based on the username prefix */
+  if (handle.startsWith("bluesky_"))   return "/bluesky.png";
+  if (handle.startsWith("federated_")) return "/federated.png";
 
-  // 3) last‑ditch placeholder
-  return `${BACKEND}/public/placeholder_profile_picture.png`;
+  /* 3) plain placeholder */
+  return "/placeholder_profile_picture.png";
 }
