@@ -46,30 +46,32 @@ export default function UserPage() {
     setCommentInputs((p) => ({ ...p, [postId]: v }));
 
   const submitComment = async (postId) => {
-    const content = commentInputs[postId]?.trim();
-    if (!content) return;
+    const text = commentInputs[postId]?.trim();
+    if (!text) return;
     try {
       await fetch("http://localhost:3030/post/comment", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        credentials:"include",
-        body: JSON.stringify({ postId, content }),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ postId, content: text }),
       });
-      setCommentInputs((p) => ({ ...p, [postId]:"" }));
-      setProfile((prev) => {
-        const updated = { ...prev };
-        const post = updated.posts.find((x) => x.postId === postId);
-        post.comments = [
-          ...(post.comments || []),
-          { username: updated.username, text: content, timestamp: new Date().toISOString() },
-        ];
-        return updated;
+  
+      setCommentInputs((p) => ({ ...p, [postId]: "" }));
+  
+      // 🔁 Re-fetch user profile to update comments
+      const res = await fetch("http://localhost:3030/user", {
+        method: "POST",
+        credentials: "include",
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to reload profile");
+  
+      setProfile(data);
     } catch (err) {
-      console.error("Failed to post comment:", err);
+      console.error("Comment submission error:", err);
     }
   };
-
+  
   /* ─── delete helper ─── */
   const handleDeletePost = async (postId) => {
     if (!window.confirm("Delete this post?")) return;
