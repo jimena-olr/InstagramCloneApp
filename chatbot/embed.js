@@ -1,5 +1,3 @@
-// embed.js – Seed Chroma server with actor and review embeddings
-
 import 'dotenv/config';
 import { ChromaClient } from 'chromadb';
 import { Document } from '@langchain/core/documents';
@@ -9,7 +7,19 @@ const OpenAIEmbeddings = OpenAIModule.OpenAIEmbeddings;
 import { Chroma } from '@langchain/community/vectorstores/chroma';
 import { get_db_connection } from '../server/models/rdbms.js';
 
-const embeddings = new OpenAIEmbeddings({ modelName: 'text-embedding-3-small' });
+class WrappedOpenAIEmbeddings extends OpenAIEmbeddings {
+  async embedDocuments(texts) {
+    return Promise.all(texts.map(text => this.embedQuery(text)));
+  }
+}
+const embeddings = new WrappedOpenAIEmbeddings({ modelName: 'text-embedding-3-small' });
+
+if (typeof embeddings.embedDocuments !== 'function') {
+  embeddings.embedDocuments = async function (texts) {
+    return Promise.all(texts.map(text => embeddings.embedQuery(text)));
+  }.bind(embeddings); // ensure proper `this` binding
+}
+
 const client = new ChromaClient({ path: 'http://localhost:8000' });
 
 async function embedTitles() {

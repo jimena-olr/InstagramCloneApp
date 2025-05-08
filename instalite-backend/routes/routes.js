@@ -19,6 +19,8 @@ import bcrypt from "bcrypt";
 import { getIO } from "../../server/chat/websocket.js";
 import { searchUsersByQuery, searchPostsByQuery } from "../../server/models/rag_helpers.js"; 
 import { get_db_connection } from "../../server/models/rdbms.js";
+import { likePost, unlikePost } from "../../posts.js";
+
 
 import {
   createChat,
