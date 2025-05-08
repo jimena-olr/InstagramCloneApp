@@ -155,8 +155,20 @@ export async function handleLogin(req, res) {
   const result = await authenticateUser(req.body);
   if (result.error) return res.status(401).json({ error: result.error });
 
-  req.session.user = { userId: result.userId, username: result.username };
-  return res.status(200).json({ username: result.username });
+  // 1) set session
+  req.session.user = {
+    userId:   result.userId,
+    username: result.username
+  };
+
+  // 2) pull the saved URL out of the users table
+  const u = await getUserById(result.userId);
+
+  // 3) return it so the front-end can store it
+  return res.status(200).json({
+    username:        result.username,
+    profileImageUrl: u.profile_image_url || null
+  });
 }
 
 export async function handleRegister(req, res) {
@@ -335,10 +347,19 @@ export async function handleGetInvites(req, res) {
 /* ------------------------------------------------------------------ */
 /*  USER IMAGE (placeholder redirect)                                 */
 /* ------------------------------------------------------------------ */
-export function handleGetUserImage(req, res) {
+export async function handleGetUserImage(req, res) {
   const userId = Number(req.params.userId);
-  const imageUrl = getUserImageByID(userId);     // returns /public/placeholder_profile_picture.png
-  return res.redirect(imageUrl);
+  // 1) fetch from DB
+  const u = await getUserById(userId);
+  // 2) if they have a saved URL, send that; otherwise fallback
+  const imageUrl = u.profile_image_url || "/public/placeholder_profile_picture.png";
+
+  // 3) if it’s an absolute S3/HTTP URL, redirect directly
+  if (imageUrl.startsWith("http")) {
+    return res.redirect(imageUrl);
+  }
+  // otherwise it’s a local path under your static server
+  return res.redirect(`http://localhost:3030${imageUrl}`);
 }
 
 /* ------------------------------------------------------------------ */
@@ -490,6 +511,7 @@ export async function handleUserProfile(req, res) {
       followerCount,
       followingCount,
       posts,
+      profileImageUrl:  user.profile_image_url
     });
   } catch (err) {
     console.error("handleUserProfile error:", err);

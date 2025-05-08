@@ -29,10 +29,12 @@ export default function ProfilePage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Upload failed");
 
-      // stash both your upload URL and the 5 actor matches
+      // stash upload URL and ensure actorMatches is always an array
       setMatchesData({
         imageUrl:     json.imageUrl,
-        actorMatches: json.actorMatches,
+        actorMatches: Array.isArray(json.actorMatches)
+                       ? json.actorMatches
+                       : []
       });
     } catch (err) {
       console.error(err);
@@ -45,19 +47,18 @@ export default function ProfilePage() {
   // 2) User clicked one of the 6 options
   const handleSelect = async (opt) => {
     const { id, imageUrl } = opt;
-  
-    // 1) Save locally so Layout.js and UserPage.js can read it immediately
+
+    // 1) Save locally so Layout.js and UserPage.js can read it
     localStorage.setItem("profileImageUrl", imageUrl);
-  
-    // 2) Tell the server both which actor (if any) and which image URL we want
+
+    // 2) Tell the main API to persist it
     try {
-      const res = await fetch("http://localhost:3000/linkActorToUser", {
+      const res = await fetch("http://localhost:3030/user/link-photo", {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
-          userId,
-          actorId:     id === "__uploaded__" ? null : id,
+          actorId: id === "__uploaded__" ? null : id,
           imageUrl
         }),
       });
@@ -67,9 +68,8 @@ export default function ProfilePage() {
       }
     } catch (err) {
       console.error("Error in handleSelect:", err);
-      // we’ll still navigate so the user isn't stuck here
     }
-  
+
     // 3) Go on to the feed
     navigate("/feed");
   };
@@ -93,21 +93,20 @@ export default function ProfilePage() {
     );
   }
 
-  // B) After upload: show the 6 clickable thumbnails
+  // B) After upload: render thumbnails
   const { imageUrl, actorMatches } = matchesData;
   const options = [
     { id: "__uploaded__", name: "My Upload", imageUrl },
-    ...actorMatches.map((m) => ({
+    ...actorMatches.map(m => ({
       id: m.nconst,
       name: m.name,
-      imageUrl: m.imageUrl,
-    })),
+      imageUrl: m.imageUrl
+    }))
   ];
 
   return (
     <div style={{ padding: 20 }}>
       <h2>Select Your Profile Photo</h2>
-
       <div
         style={{
           display:            "grid",
@@ -117,21 +116,17 @@ export default function ProfilePage() {
           marginBottom:       24,
         }}
       >
-        {options.map((opt) => (
+        {options.map(opt => (
           <div
             key={opt.id}
             onClick={() => handleSelect(opt)}
             style={{
-              cursor:          "pointer",
-              border:          "1px solid #ccc",
-              borderRadius:    8,
-              padding:         8,
-              textAlign:       "center",
-              userSelect:      "none",
-              transition:      "border 0.2s",
+              cursor:       "pointer",
+              border:       "1px solid #ccc",
+              borderRadius: 8,
+              padding:      8,
+              textAlign:    "center",
             }}
-            onMouseEnter={(e) => e.currentTarget.style.border = "2px solid #007bff"}
-            onMouseLeave={(e) => e.currentTarget.style.border = "1px solid #ccc"}
           >
             <img
               src={opt.imageUrl}

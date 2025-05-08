@@ -92,6 +92,31 @@ function requireSessionAuth(req, res, next) {
 export default function registerRoutes(app) {
   /* ---------- USER IMAGE (placeholder / future CDN) ------- */
   app.get("/users/:userId/image", handleGetUserImage);
+  +  /* ---------- LINK PROFILE PHOTO ------------------------- */
+  app.post(
+    "/user/link-photo",
+    requireSessionAuth,
+    async (req, res) => {
+      const userId = req.session.user.userId;
+      const { actorId, imageUrl } = req.body;
+      try {
+        const db = get_db_connection();
+        await db.send_sql(
+          `UPDATE users
+             SET linked_actor_id   = ?,
+                 profile_image_url = ?
+           WHERE user_id = ?`,
+          [actorId, imageUrl, userId]
+        );
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("Link photo error:", err);
+        return res
+          .status(500)
+          .json({ error: "Failed to link profile photo" });
+      }
+    }
+  );
 
   /* ---------- AUTH & LOGOUT ------------------------------- */
   app.post("/auth/login",    handleLogin);

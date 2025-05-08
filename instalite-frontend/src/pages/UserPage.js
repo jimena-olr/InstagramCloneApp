@@ -12,18 +12,28 @@ export default function UserPage() {
   useEffect(() => {
     async function fetchUserProfile() {
       try {
+        // confirm session
         const sess = await fetch("http://localhost:3030/session", {
           credentials: "include",
         });
         const { sessionUser } = await sess.json();
         if (!sessionUser) return navigate("/login");
 
+        // fetch the profile (now includes profileImageUrl)
         const res = await fetch("http://localhost:3030/user", {
           method: "POST",
           credentials: "include",
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to load profile");
+
+        // persist avatar into localStorage
+        if (data.profileImageUrl) {
+          const avatar = data.profileImageUrl.startsWith("http")
+            ? data.profileImageUrl
+            : `http://localhost:3030${data.profileImageUrl}`;
+          localStorage.setItem("profileImageUrl", avatar);
+        }
 
         // annotate each post with `liked: false`
         data.posts = data.posts.map((p) => ({ ...p, liked: false }));
@@ -38,18 +48,20 @@ export default function UserPage() {
 
   // 2️⃣ comment helpers
   const handleCommentChange = (postId, value) =>
-    setCommentInputs((p) => ({ ...p, [postId]: value }));
+    setCommentInputs((prev) => ({ ...prev, [postId]: value }));
 
   const submitComment = async (postId) => {
     const content = commentInputs[postId]?.trim();
     if (!content) return;
     try {
-      await fetch("http://localhost:3030/post/comment", {
+      const res = await fetch("http://localhost:3030/post/comment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ postId, content }),
       });
+      if (!res.ok) throw new Error((await res.json()).error || "Failed to post comment");
+
       setProfile((prev) => {
         const updated = { ...prev };
         const post = updated.posts.find((x) => x.postId === postId);
@@ -59,7 +71,7 @@ export default function UserPage() {
         ];
         return updated;
       });
-      setCommentInputs((p) => ({ ...p, [postId]: "" }));
+      setCommentInputs((prev) => ({ ...prev, [postId]: "" }));
     } catch (err) {
       console.error("Failed to post comment:", err);
     }
@@ -91,22 +103,16 @@ export default function UserPage() {
       posts: prev.posts.map((p) => {
         if (p.postId !== postId) return p;
         const willLike = !p.liked;
-        return {
-          ...p,
-          liked: willLike,
-          likeCount: p.likeCount + (willLike ? 1 : -1),
-        };
+        return { ...p, liked: willLike, likeCount: p.likeCount + (willLike ? 1 : -1) };
       }),
     }));
+
     const post = profile.posts.find((p) => p.postId === postId);
     try {
-      await fetch(
-        `http://localhost:3030/post/${postId}/like`,
-        {
-          method: post.liked ? "DELETE" : "POST",
-          credentials: "include",
-        }
-      );
+      await fetch(`http://localhost:3030/post/${postId}/like`, {
+        method: post.liked ? "DELETE" : "POST",
+        credentials: "include",
+      });
     } catch (err) {
       console.error("Like toggle failed:", err);
       // rollback
@@ -114,11 +120,7 @@ export default function UserPage() {
         ...prev,
         posts: prev.posts.map((p) =>
           p.postId === postId
-            ? {
-                ...p,
-                liked: !p.liked,
-                likeCount: p.likeCount + (p.liked ? 1 : -1),
-              }
+            ? { ...p, liked: !p.liked, likeCount: p.likeCount + (p.liked ? 1 : -1) }
             : p
         ),
       }));
@@ -165,6 +167,7 @@ export default function UserPage() {
 
       <h3 style={{ marginTop: "2rem" }}>Your Posts</h3>
       {posts.length === 0 && <p>You haven't posted anything yet.</p>}
+
       {posts.map((post) => {
         const imgSrc = post.imageUrl
           ? post.imageUrl.startsWith("http")
@@ -184,10 +187,12 @@ export default function UserPage() {
               <img
                 src={imgSrc}
                 alt="post"
-                style={{ display: "block",
-                  width: "300px",       // or whatever max width you want
-                  height: "auto",       // preserve aspect ratio
-                  marginTop: "0.5rem" }}
+                style={{
+                  display: "block",
+                  width: "300px",
+                  height: "auto",
+                  marginTop: "0.5rem",
+                }}
               />
             )}
 
@@ -216,16 +221,7 @@ export default function UserPage() {
 
             {/* like toggle */}
             <div style={{ marginTop: "0.3rem", fontSize: "0.85rem" }}>
-              <button
-                onClick={() => handleToggleLike(post.postId)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: "1rem",
-                  color: post.liked ? "red" : "black",
-                }}
-              >
+              <button onClick={() => handleToggleLike(post.postId)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1rem", color: post.liked ? "red" : "black" }}>
                 ❤️ {post.likeCount}
               </button>
             </div>
