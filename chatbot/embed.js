@@ -8,7 +8,7 @@ import * as OpenAIModule from "@langchain/openai";
 const OpenAIEmbeddings = OpenAIModule.OpenAIEmbeddings;
 import { get_db_connection } from '../server/models/rdbms.js';
 
-const embeddings = new OpenAIEmbeddings({ modelName: "text-embedding-ada-002" });
+const embeddings = new OpenAIEmbeddings({ modelName: "text-embedding-3-small" });
 const CHROMA_URL = process.env.CHROMA_URL || "http://localhost:8000";
 
 async function embedTitles() {

@@ -8,10 +8,8 @@ import socket from './socket';
 import ChatsPage from './pages/ChatsPage';
 import SearchPage from './pages/SearchPage';
 import UserPage from './pages/UserPage';
-import FriendsPage from "./pages/FriendsPage"; // Make sure this file exists later
-import ProfilePage  from "./pages/ProfilePage";
 import SettingsPage from './pages/SettingsPage';
-import UserSearchPage from "./pages/UserSearchPage";
+import UserSearchPage from './pages/UserSearchPage';
 
 function App() {
   const navigate = useNavigate();
@@ -73,13 +71,11 @@ useEffect(() => {
         <Route path="/feed" element={isAuthenticated ? <FeedPage /> : <Navigate to="/login" />} />
         <Route path="/login" element={isAuthenticated ? <Navigate to="/feed" /> : <LoginPage />} />
         <Route path="/register" element={isAuthenticated ? <Navigate to="/feed" /> : <RegisterPage />} />
-        <Route path="/profile"  element={<ProfilePage />} />
         <Route path="/chats" element={isAuthenticated ? <ChatsPage /> : <Navigate to="/login" />} />
         <Route path="/search" element={isAuthenticated ? <SearchPage /> : <Navigate to="/login" />} />
         <Route path="/settings" element={isAuthenticated ? <SettingsPage /> : <Navigate to="/login" />} />
         <Route path="/user" element={isAuthenticated ? <UserPage /> : <Navigate to="/login" />} />
         <Route path="/" element={<Navigate to={isAuthenticated ? "/feed" : "/login"} />} />
-        <Route path="/friends" element={<FriendsPage />} />
         <Route path="/users/search" element={isAuthenticated ? <UserSearchPage /> : <Navigate to="/login" />} />
       </Route>
     </Routes>

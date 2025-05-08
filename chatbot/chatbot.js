@@ -27,7 +27,7 @@ const prompt = new PromptTemplate({
 });
 
 const model = new ChatOpenAI({
-  modelName: "gpt-3.5-turbo",
+  modelName: "gpt-4.1-nano",
   temperature: 0.7
 });
 

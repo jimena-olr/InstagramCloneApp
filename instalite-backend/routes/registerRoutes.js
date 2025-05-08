@@ -3,27 +3,7 @@
 /* ----------------------------------------------------------- */
 
 import multer from "multer";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname  = path.dirname(__filename);
-
-
-// point diskStorage at /<project>/uploads
-const uploadDir = path.resolve(__dirname, "..", "..", "uploads");
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    // userId‐timestamp.ext → e.g. 42-1683456789012.png
-    const ext  = path.extname(file.originalname);
-    const name = `${req.session.user.userId}-${Date.now()}${ext}`;
-    cb(null, name);
-  },
-});
-const upload = multer({ storage });
+const upload = multer({ storage: multer.memoryStorage() });
 
 /* ---- handlers re‑exported from routes.js ---- */
 import {
@@ -32,7 +12,6 @@ import {
   handleRegister,
   handleSearch,
   handleLogout,
-  handleLikePost,
 
   /* feed / profile / posts */
   handleGetFeed,
@@ -68,11 +47,9 @@ import {
   handleUpdateSettings,
 
   /* user search/follow */
-  handleSearchUsers,
   handleFollowUser,
   handleUnfollowUser,
-  handlePostComment,
-  handleDeletePost,
+  handleUserSearch
 } from "./routes.js";
 
 /* optional DB helper for raw queries in post upload */
@@ -87,7 +64,7 @@ function requireSessionAuth(req, res, next) {
 }
 
 /**
- * Mount every HTTP route on the Express `app`.
+ * Mount every HTTP route on the Express `app`.
  */
 export default function registerRoutes(app) {
   /* ---------- USER IMAGE (placeholder / future CDN) ------- */
@@ -136,11 +113,12 @@ export default function registerRoutes(app) {
     requireSessionAuth,
     upload.single("image"),
     async (req, res) => {
-      const user = req.session.user;
       const textContent = req.body.text_content;
-      let hashtags = [];
+      let   hashtags;
       try {
-        hashtags = req.body.hashtag_text ? JSON.parse(req.body.hashtag_text) : [];
+        hashtags = req.body.hashtag_text
+          ? JSON.parse(req.body.hashtag_text)
+          : [];
         if (!Array.isArray(hashtags)) throw new Error();
       } catch {
         return res
@@ -148,12 +126,11 @@ export default function registerRoutes(app) {
           .json({ error: "hashtag_text must be a JSON array of strings" });
       }
 
-      if (!textContent) {
-        return res.status(400).json({ error: "Missing text_content" });
-      }
+      const user = req.session.user;
+      if (!textContent || !user)
+        return res.status(400).json({ error: "Missing text or session" });
 
-      // ← store the public URL path into your DB
-      const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+      const imageUrl = req.file ? req.file.originalname : null;
 
       try {
         const db = get_db_connection();
@@ -170,14 +147,6 @@ export default function registerRoutes(app) {
         return res.status(500).json({ error: "Failed to create post" });
       }
     }
-  );
-
-  app.post("/post/comment", requireSessionAuth, handlePostComment);
-
-  app.post(
-    "/post/:postId/like",
-    requireSessionAuth,
-    handleLikePost
   );
 
   /* ---------- CHAT (sessions, messages) ------------------- */
@@ -197,10 +166,14 @@ export default function registerRoutes(app) {
   app.get("/chat/history",  handleGetChatHistory);
   app.get("/chat/invites",  handleGetInvites);
   app.get("/chat/sessions", handleGetUserChats);
+  
 
+  /* ---------- user search -------------------- */
+  app.get("/users/search", handleUserSearch);
+  
   /* ---------- MUTUALS ------------------------------------- */
-  app.get("/mutuals", requireSessionAuth, handleGetMutuals);
-  app.get("/users/:userId", requireSessionAuth, handleGetUserById);
+  app.get("/mutuals", handleGetMutuals);
+  app.get("/users/:userId", handleGetUserById);
   
   /* ---------- SESSION DEBUG (optional) -------------------- */
   app.get("/session", (req, res) =>
@@ -212,14 +185,10 @@ export default function registerRoutes(app) {
   app.get(  "/settings", requireSessionAuth, handleGetSettings);
 
 
-  /* ---------- search user/add follow -------------------- */
-  // user‐search
-  app.get("/users/search", requireSessionAuth, handleSearchUsers);
+  /* ---------- follow -------------------- */
+
 
   // follow action
-  app.post("/users/follow", requireSessionAuth, handleFollowUser);
-  app.delete("/users/follow", requireSessionAuth, handleUnfollowUser);
-  app.delete("/post/:postId", requireSessionAuth, handleDeletePost);
-  app.get("/mutuals", requireSessionAuth, handleGetMutuals);
-
+  app.post("/users/:followeeId/follow",   requireSessionAuth, handleFollowUser);
+  app.delete("/users/:followeeId/follow", requireSessionAuth, handleUnfollowUser);
 }

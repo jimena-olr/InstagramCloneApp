@@ -4,9 +4,7 @@ import http from 'http';
 import registerRoutes from './routes/registerRoutes.js';
 import { initChatModule } from '../server/chat/chat.js'; 
 import { initSocketServer } from '../server/chat/websocket.js';
-import { createRetrieverFromDatabase } from '../installite-backend/utils/vector.js';
-
-
+import { createRetrieverFromDatabase } from '../chatbot/vector.js';
 import cors from 'cors';
 import session from 'express-session';
 import dotenv from 'dotenv';
@@ -22,11 +20,6 @@ async function startServer() {
   const app = express();
 
   app.use(express.static(path.join(__dirname, "public")));
-
-  app.use(
-    "/uploads",
-    express.static(path.join(__dirname, "..", "uploads"))
-  );
 
   app.use(
     cors({
@@ -55,9 +48,9 @@ async function startServer() {
   // --------------------------------
 
   await createRetrieverFromDatabase().catch(err => {
-    console.error('Failed to load retrievers:', err);
+    console.error('Retriever init failed:', err);
     process.exit(1);
-  });  
+  });
 
   const PORT = process.env.PORT || 3030;
   httpServer.listen(PORT, () => {

@@ -11,12 +11,12 @@ import {
   updateAffiliation,
   updateBirthday,
   updateHashtags,
-  updateUserPassword
+  updateUserPassword,
+  searchUsers
 } from "../../users.js";
 import bcrypt from "bcrypt";
 
 import { getIO } from "../../server/chat/websocket.js";
-import { searchUsersByQuery, searchPostsByQuery } from "../../server/models/rag_helpers.js"; 
 import { get_db_connection } from "../../server/models/rdbms.js";
 
 import {
@@ -34,12 +34,12 @@ import {
 } from "../../server/chat/chat.js";
 
 import { getMutualsForUser } from "../../friends.js";
-import { getPostsByUser, getPostsForUser, deletePost } from "../../posts.js";
+import { getPostsByUser, getPostsForUser } from "../../posts.js";
 
 /* ---- chatbot helpers ---- */
 import { callChatbot } from "../../chatbot/chatbot.js";
 import {
-  createRetrieverFromDatabase,
+  ensureRetrieversReady,
   retrieveRelevantDocs
 } from "../../installite-backend/utils/vector.js";
 
@@ -223,22 +223,16 @@ export function handleLogout(req, res) {
 export async function handleSearch(req, res) {
   const { question } = req.body;
   if (!question) return res.status(400).json({ error: "No question provided" });
+
   try {
     if (!retrieverInitialized) {
       console.log("Initializing chatbot retrievers…");
-      await createRetrieverFromDatabase();
+      await ensureRetrieversReady();
       retrieverInitialized = true;
     }
     const docs   = await retrieveRelevantDocs(question);
     const answer = await callChatbot(question, docs);
-
-    const [users, posts] = await Promise.all([
-      searchUsersByQuery(question),
-      searchPostsByQuery(question)
-    ]);
-
-    return res.json({ answer, users, posts });
-
+    return res.json({ answer });
   } catch (err) {
     console.error("Chatbot error:", err);
     return res.status(500).json({ error: "Chatbot failed to process question" });
@@ -251,12 +245,21 @@ export async function handleSearch(req, res) {
 
 /**
  * GET /mutuals?userId=…
- * Returns only those users who both follow you and are followed by you.
+ * Returns only users who either follow you or are followed by you.
  */
 export async function handleGetMutuals(req, res) {
+  // 1) make sure ?userId= is present
+  if (req.query.userId == null) {
+    return res.status(400).json({ error: "Missing userId" });
+  }
+  // 2) parse & validate
   const userId = Number(req.query.userId);
-  if (!userId) return res.status(400).json({ error: "Missing userId" });
+  if (Number.isNaN(userId)) {
+    return res.status(400).json({ error: "Invalid userId" });
+  }
+
   try {
+    // 3) fetch the two lists and merge
     const mutuals = await getMutualsForUser(userId);
     return res.json(mutuals);
   } catch (err) {
@@ -264,7 +267,6 @@ export async function handleGetMutuals(req, res) {
     return res.status(500).json({ error: "Database error fetching mutuals" });
   }
 }
-
 
 /* ------------------------------------------------------------------ */
 /*  FEED                                                                */
@@ -363,22 +365,29 @@ export async function handleGetUserImage(req, res) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  USER SEARCH + ADD FOLLOW                                          */
+/* REMOVE/ADD FOLLOW                                                  */
 /* ------------------------------------------------------------------ */
-
 export async function handleFollowUser(req, res) {
-  const { userId, followeeId } = req.body;
-  if (!userId || !followeeId) {
-    return res.status(400).json({ error: "Missing userId or followeeId" });
+  // 1) Identify who’s following whom
+  const followerId = req.session?.user?.userId;
+  const followeeId = Number(req.params.followeeId);
+
+  if (!followerId) {
+    return res.status(401).json({ error: "Not logged in" });
+  }
+  if (!followeeId) {
+    return res.status(400).json({ error: "Missing followeeId" });
   }
 
+  // 2) Upsert the follow relationship
   try {
     const db = get_db_connection();
     await db.send_sql(
       `INSERT INTO friends (follower, following)
-       VALUES (?, ?)
-       ON DUPLICATE KEY UPDATE follower = follower`,  // idempotent
-      [userId, followeeId]
+         VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE
+         follower = follower`,        // idempotent
+      [followerId, followeeId]
     );
     return res.json({ success: true });
   } catch (err) {
@@ -387,15 +396,13 @@ export async function handleFollowUser(req, res) {
   }
 }
 
-/**
- * DELETE /users/follow?userId=…&followeeId=…
- * Removes an existing follow relationship.
- */
+
+
 export async function handleUnfollowUser(req, res) {
-  const userId     = Number(req.query.userId);
-  const followeeId = Number(req.query.followeeId);
-  if (!userId || !followeeId) {
-    return res.status(400).json({ error: "Missing userId or followeeId" });
+  const followerId = req.session.user.userId;
+  const followeeId = Number(req.params.followeeId);
+  if (!followeeId) {
+    return res.status(400).json({ error: "Missing followeeId" });
   }
 
   try {
@@ -404,7 +411,7 @@ export async function handleUnfollowUser(req, res) {
       `DELETE FROM friends
          WHERE follower  = ?
            AND following = ?`,
-      [userId, followeeId]
+      [followerId, followeeId]
     );
     return res.json({ success: true });
   } catch (err) {
@@ -414,47 +421,63 @@ export async function handleUnfollowUser(req, res) {
 }
 
 
-/**
- * GET /users/search?q=…
- * Search users by firstName, lastName, or username,
- * excluding the current user, and indicate follow status.
- */
-export async function handleSearchUsers(req, res) {
-  const userId = Number(req.query.userId);
-  const q      = req.query.q?.trim() || "";
-  if (!userId || !q) {
-    return res.status(400).json({ error: "Missing userId or query" });
-  }
 
-  const db   = get_db_connection();
-  const like = `%${q}%`;
+/**
+ * GET /users/search?q=...
+ * Returns up to 25 matching users, each with an `initiallyFollowing` flag.
+ */
+export async function handleUserSearch(req, res) {
+  const q = (req.query.q || "").trim();
+  if (!q) return res.json([]);
+
   try {
-    const [rows] = await db.send_sql(
-      `SELECT
-         u.user_id    AS userId,
-         u.first_name AS firstName,
-         u.last_name  AS lastName,
-         u.username   AS username,
-         EXISTS(
-           SELECT 1 FROM friends f
-            WHERE f.follower  = ?
-              AND f.following = u.user_id
-         )            AS following
-       FROM users u
-       WHERE (u.first_name LIKE ?
-           OR u.last_name  LIKE ?
-           OR u.username   LIKE ?)
-         AND u.user_id <> ?
-       ORDER BY following DESC, u.first_name, u.last_name
-       LIMIT 50`,
-      [userId, like, like, like, userId]
-    );
-    return res.json(rows);
+    // 1) Fetch the matching rows
+    const rows = await searchUsers(q);
+
+    // 2) Who am I?
+    const me = req.session?.user?.userId || null;
+
+    // 3) Exclude myself from the results
+    const filtered = me
+      ? rows.filter(u => u.user_id !== me)
+      : rows;
+
+    // 4) Determine which of those I’m already following
+    let followingSet = new Set();
+    if (me && filtered.length) {
+      const db = await get_db_connection().connect();
+      const ids = filtered.map(u => u.user_id);
+      const placeholders = ids.map(() => "?").join(",");
+      const [follows] = await db.send_sql(
+        `SELECT following
+           FROM friends
+          WHERE follower = ?
+            AND following IN (${placeholders})`,
+        [me, ...ids]
+      );
+      followingSet = new Set(follows.map(f => f.following));
+    }
+
+    // 5) Map into the shape React expects
+    const result = filtered.map(u => ({
+      userId:            u.user_id,
+      username:          u.username,
+      firstName:         u.first_name,
+      lastName:          u.last_name,
+      profileImageUrl:   u.profile_image_url,
+      initiallyFollowing: me ? followingSet.has(u.user_id) : false
+    }));
+
+    return res.json(result);
   } catch (err) {
-    console.error("User search failed:", err);
-    return res.status(500).json({ error: "Database error" });
+    console.error("handleUserSearch error:", err);
+    return res.status(500).json({ error: "Failed to search users" });
   }
 }
+
+
+
+
 
 
 /* ------------------------------------------------------------------ */
@@ -534,83 +557,4 @@ export async function handleGetUserById(req, res) {
     firstName: u.first_name,
     lastName:  u.last_name,
   });
-}
-
-export async function handleUserSearch(req, res) {
-  const { query } = req.body;
-  if (!query) return res.status(400).json({ error: "Missing search query" });
-
-  try {
-    const db = await get_db_connection().connect();
-    const [results] = await db.send_sql(
-      `SELECT user_id, username FROM users WHERE username LIKE ? LIMIT 10`,
-      [`%${query}%`]
-    );
-    res.json({ users: results });
-  } catch (err) {
-    console.error("User search failed:", err);
-    res.status(500).json({ error: "Database error searching users" });
-  }
-}
-
-export async function handlePostComment(req, res) {
-  const userId = req.session?.user?.userId;
-  const { postId, content } = req.body;
-
-  if (!userId || !postId || !content) {
-    return res.status(400).json({ error: "Missing fields" });
-  }
-
-  try {
-    const db = get_db_connection();
-    await db.send_sql(
-      `INSERT INTO comments (post_id, user_id, text_content)
-       VALUES (?, ?, ?)`,
-      [postId, userId, content]
-    );
-    return res.status(200).json({ success: true });
-  } catch (err) {
-    console.error("handlePostComment error:", err);
-    return res.status(500).json({ error: "Failed to submit comment" });
-  }
-}
-
-export async function handleDeletePost(req, res) {
-  const userId = req.session?.user?.userId;
-  const postId = Number(req.params.postId);
-
-  if (!userId || !postId) {
-    return res.status(400).json({ error: "Missing user or post ID" });
-  }
-
-  const result = await deletePost(postId, userId);
-  if (result.error) {
-    return res.status(403).json({ error: result.error });
-  }
-
-  return res.json({ success: true });
-}
-
-export async function handleLikePost(req, res) {
-  const userId = req.session.user.userId;
-  const postId = Number(req.params.postId);
-  if (!postId) return res.status(400).json({ error: "Invalid postId" });
-
-  try {
-    const db = get_db_connection();
-    // insert ignore so multiple clicks don’t double‐count
-    await db.send_sql(
-      `INSERT IGNORE INTO post_likes (user_id, post_id) VALUES (?, ?)`,
-      [userId, postId]
-    );
-    // fetch updated count
-    const [[{ likeCount }]] = await db.send_sql(
-      `SELECT COUNT(*) AS likeCount FROM post_likes WHERE post_id = ?`,
-      [postId]
-    );
-    return res.json({ success: true, likeCount });
-  } catch (err) {
-    console.error("handleLikePost error:", err);
-    return res.status(500).json({ error: "Failed to like post" });
-  }
 }

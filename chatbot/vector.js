@@ -37,8 +37,7 @@ export async function createRetrieverFromDatabase() {
       chunkOverlap: 30
     });
     const splitDocs = await splitter.splitDocuments(docs);
-  
-    const embeddings = new OpenAIEmbeddings({ modelName: "text-embedding-ada-002" });
+    const embeddings = new OpenAIEmbeddings({ modelName: "text-embedding-3-small" });
   
     const vectorStore = await Chroma.fromDocuments(splitDocs, embeddings, {
       collectionName: "actor_movie_roles",

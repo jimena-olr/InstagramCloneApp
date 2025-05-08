@@ -8,17 +8,6 @@ const uid = Number(localStorage.getItem("userId"));
 // Helpers
 const normalizeMembers = (arr = []) =>
   [...new Set(arr.map(Number))].sort((a, b) => a - b);
-const idToName = (list, id) =>
-  id === uid
-    ? "You"
-    : list.find(u => u.userId === id)?.firstName || `User ${id}`;
-const prettyMembers = (members, list) =>
-  normalizeMembers(members)
-    .filter(id => id !== uid)
-    .map(id => idToName(list, id))
-    .join(", ") || "You";
-const chatLabel = (chat, list) =>
-  chat.name?.trim() || prettyMembers(chat.members, list);
 
 export default function ChatsPage() {
   const [chats, setChats] = useState([]);
@@ -39,8 +28,19 @@ export default function ChatsPage() {
   // add this:
   const [membersData, setMembersData] = useState([]);
 
+  const idToName = useCallback((id) => {
+    if (id === uid) return "You";
+    const m = mutuals.find(u => u.userId === id);
+    if (m) return m.firstName;
+    const d = membersData.find(u => u.userId === id);
+    if (d) return d.username;
+    return `User ${id}`;
+  }, [mutuals, membersData]);
 
-  const joinedRooms = useRef(new Set());
+
+
+  const joinedRooms = useRef(new Set());  
+
 
   // Load chats & histories
   const loadChats = useCallback(async () => {
@@ -67,13 +67,13 @@ export default function ChatsPage() {
           [c.chatId]: h.map(m => ({
             senderId: m.senderId,
             text: m.text,
-            senderName: idToName(mutuals, m.senderId),
+            senderName: idToName(m.senderId),
             senderUsername: m.senderUsername
           }))
         }));
       }
     }
-  }, [active, mutuals, history]);
+  }, [active, idToName]);
 
   // Load invites
   const loadInvites = useCallback(async () => {
@@ -91,17 +91,26 @@ export default function ChatsPage() {
       .catch(console.error);
   }, []);
 
+  // Fetch mutuals only once (on mount or when uid changes)
   useEffect(() => {
-    loadMutuals();
+    if (uid) {
+      loadMutuals();
+    }
+  }, [loadMutuals, uid]);
+
+// Fetch chats & invites on mount and whenever their loaders change
+  useEffect(() => {
     loadChats();
     loadInvites();
-  }, [loadChats, loadInvites, loadMutuals]);
+  }, [loadChats, loadInvites]);
+
 
   // auto-join socket rooms
   useEffect(() => {
     chats.forEach(c => {
       if (!joinedRooms.current.has(c.chatId)) {
         socket.emit("joinChat", c.chatId, () => {});
+        socket.emit("requestOnlineUsers");
         joinedRooms.current.add(c.chatId);
       }
     });
@@ -116,7 +125,7 @@ export default function ChatsPage() {
           ...(prev[msg.chatId] || []),
           {
             senderId: msg.senderId,
-            senderName: idToName(mutuals, msg.senderId),
+            senderName: idToName(msg.senderId),
             senderUsername: msg.senderUsername,
             text: msg.text
           }
@@ -129,25 +138,70 @@ export default function ChatsPage() {
     };
     const onUserJoined = ({ chatId, userId }) => {
       setChats(prev =>
-        prev.map(c =>
+        [...prev].map(c =>
           c.chatId === chatId
             ? { ...c, members: normalizeMembers([...c.members, userId]) }
             : c
         )
       );
+      //socket.emit("requestOnlineUsers");      
+      if (active === chatId) {
+        const otherIds = normalizeMembers([...chats.find(c => c.chatId === chatId)?.members || [], userId]).filter(id => id !== uid);
+        Promise.all(
+          otherIds.map(id =>
+            fetch(`http://localhost:3030/users/${id}`)
+              .then(r => r.ok ? r.json() : null)
+              .catch(() => null)
+          )
+        ).then(results => {
+          setMembersData(results.filter(u => u).map(u => ({
+            userId: u.userId,
+            username: u.username
+          })));
+        });
+      }      
     };
+    
+    
     const onUserLeft = ({ chatId, userId }) => {
-      setChats(prev =>
-        prev
+      setChats(prev => {
+        const updated = [...prev]
           .map(c =>
             c.chatId === chatId
               ? { ...c, members: c.members.filter(id => id !== userId) }
               : c
           )
-          .filter(c => !(chatId === c.chatId && userId === uid))
-      );
+          .filter(c => !(chatId === c.chatId && userId === uid));
+    
+        if (active === chatId) {
+          const activeChat = updated.find(c => c.chatId === chatId);
+          const otherIds = activeChat
+            ? activeChat.members.filter(id => id !== uid)
+            : [];
+          if (otherIds.length === 0) {
+            setMembersData([]); 
+          } else {
+            Promise.all(
+              otherIds.map(id =>
+                fetch(`http://localhost:3030/users/${id}`)
+                  .then(r => r.ok ? r.json() : null)
+                  .catch(() => null)
+              )
+            ).then(results => {
+              setMembersData(results.filter(u => u).map(u => ({
+                userId: u.userId,
+                username: u.username
+              })));
+            });
+          }
+        }
+    
+        return [...updated];
+      });
       if (userId === uid && active === chatId) setActive(null);
     };
+    
+
     const onRenamed = ({ chatId, name }) => {
       setChats(prev =>
         prev.map(c => (c.chatId === chatId ? { ...c, name } : c))
@@ -185,7 +239,7 @@ export default function ChatsPage() {
    socket.on("userConnected", onUserConnected);
    socket.on("userDisconnected", onUserDisconnected);
 
-   socket.emit("requestOnlineUsers")
+   //socket.emit("requestOnlineUsers")
 
     return () => {
       socket.off("chatMessage", onMsg);
@@ -198,7 +252,7 @@ export default function ChatsPage() {
       socket.off("userConnected", onUserConnected);
       socket.off("userDisconnected", onUserDisconnected);
     };
-  }, [active, mutuals, loadChats, loadInvites]);
+  }, [chats, active, idToName, loadChats, loadInvites]);
 
   // Accept/reject invites
   async function acceptInvite(chatId) {
@@ -208,6 +262,7 @@ export default function ChatsPage() {
       body: JSON.stringify({ chatId, userId: uid })
     });
     socket.emit("joinChat", chatId, () => {});
+    socket.emit("requestOnlineUsers");
     joinedRooms.current.add(chatId);
     loadChats();
     loadInvites();
@@ -255,7 +310,7 @@ export default function ChatsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chatId, userId: uid })
     });
-    setChats(prev => prev.filter(c => c.chatId !== chatId));
+    setChats(prev => [...prev].filter(c => c.chatId !== chatId));
     if (active === chatId) setActive(null);
     socket.emit("leaveChat", chatId, () => {});
   }
@@ -271,7 +326,7 @@ export default function ChatsPage() {
       body: JSON.stringify({ name: newName.trim() })
     });
     setChats(prev =>
-      prev.map(c =>
+      [...prev].map(c =>
         c.chatId === chatId ? { ...c, name: newName.trim() } : c
       )
     );
@@ -289,6 +344,20 @@ export default function ChatsPage() {
     setInviteChatId("new");
     setSelectedInvitee(null);
   }
+
+
+  
+    // Build default title from IDs
+    const prettyMembers = (members) =>
+      normalizeMembers(members)
+        .filter(id => id !== uid)
+        .map(id => idToName(id))
+        .join(", ") || "You";
+  
+    // Final label: either custom name or default members list
+    const chatLabel = (chat) =>
+      chat.name?.trim() || prettyMembers(chat.members);
+
   async function confirmCreateAndInvite() {
     if (!selectedInvitee) return;
     // 1) create or fetch session
@@ -304,6 +373,7 @@ export default function ChatsPage() {
       { chatId, members: [uid, selectedInvitee], name: null }
     ]);
     socket.emit("joinChat", chatId, () => {});
+    socket.emit("requestOnlineUsers");
     joinedRooms.current.add(chatId);
     setHistory(prev => ({ ...prev, [chatId]: [] }));
 
@@ -371,11 +441,11 @@ export default function ChatsPage() {
               const label = inv.chatName
                 ? inv.chatName
                 : chat
-                  ? chatLabel(chat, mutuals)
+                  ? chatLabel(chat)
                   : `Chat ${inv.chatId}`;
               return (
                 <div key={inv.chatId} style={{ marginBottom: 8 }}>
-                  <strong>{idToName(mutuals, inv.senderId)}</strong> invited you to{" "}
+                  <strong>{idToName(inv.senderId)}</strong> invited you to{" "}
                   <strong>{label}</strong><br/>
                   <button onClick={() => acceptInvite(inv.chatId)}>Accept</button>{" "}
                   <button onClick={() => rejectInvite(inv.chatId)}>Reject</button>
@@ -454,16 +524,16 @@ export default function ChatsPage() {
                 background: c.chatId === active ? "#eef" : undefined
               }}
             >
-              <strong>{chatLabel(c, mutuals)}</strong><br/>
+              <strong>{chatLabel(c)}</strong><br/>
               {(() => {
-                const membersStr = prettyMembers(c.members, mutuals);
+                const membersStr = prettyMembers(c.members);
 
                 // 1) no one else? "Just you!"
                 if (!membersStr || membersStr === "You") {
                   return <small><em>Just you!</em></small>;
                 }
                 // 2) 1:1 chat with default name? hide subtitle
-                if ((c.name?.trim() || "") === membersStr) {
+                if (chatLabel(c) === membersStr) {
                   return null;
                 }
                 // 3) otherwise show list plain
