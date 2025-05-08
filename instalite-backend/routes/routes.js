@@ -611,3 +611,57 @@ export async function handleUnlikePost(req, res) {
     return res.status(500).json({ error: "Failed to unlike post" });
   }
 }
+
+/**
+ * GET /user/:username
+ * Returns public profile info (posts, follower/following counts) for any user.
+ */
+export async function handleGetProfileByUsername(req, res) {
+  const { username } = req.params;
+  if (!username) return res.status(400).json({ error: "Missing username" });
+
+  try {
+    const db = get_db_connection();
+
+    /* 1️⃣—pull the user row (include every field you’ll use) */
+    const [[user]] = await db.send_sql(
+      `SELECT user_id,
+              username,
+              first_name,
+              last_name,
+              profile_image_url
+         FROM users
+        WHERE username = ?`,
+      [username]
+    );
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    /* 2️⃣—posts + follower/following counts */
+    const posts = await getPostsByUser(user.user_id);
+
+    const [[{ followerCount }]]  = await db.send_sql(
+      "SELECT COUNT(*) AS followerCount  FROM friends WHERE following = ?",
+      [user.user_id]
+    );
+    const [[{ followingCount }]] = await db.send_sql(
+      "SELECT COUNT(*) AS followingCount FROM friends WHERE follower  = ?",
+      [user.user_id]
+    );
+
+    /* 3️⃣—send everything the React page expects */
+    return res.json({
+      userId:          user.user_id,
+      username:        user.username,
+      firstName:       user.first_name,
+      lastName:        user.last_name,
+      profileImageUrl: user.profile_image_url,
+      followerCount,
+      followingCount,
+      posts
+    });
+  } catch (err) {
+    console.error("handleGetProfileByUsername:", err);
+    return res.status(500).json({ error: "DB error fetching profile" });
+  }
+}
+

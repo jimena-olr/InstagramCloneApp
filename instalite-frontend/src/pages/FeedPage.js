@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
+import { Link } from "react-router-dom";
+import { resolveAvatar } from "../utils/avatar";
+
 
 export default function FeedPage() {
   const [posts, setPosts]                 = useState([]);
@@ -160,15 +163,19 @@ export default function FeedPage() {
       ) : (
         posts.map((post) => {
           const hashtagsArr = Array.isArray(post.hashtags) ? post.hashtags : [];
-          const imgSrc = post.imageUrl
-            ? post.imageUrl.startsWith("http") ? post.imageUrl : `http://localhost:3030${post.imageUrl}`
-            : null;
+          // const imgSrc = post.imageUrl
+          //   ? post.imageUrl.startsWith("http") ? post.imageUrl : `http://localhost:3030${post.imageUrl}`
+          //   : null;
+          const imgSrc = resolveAvatar(post.profileImageUrl, `@${post.author}`);
 
           return (
             <div key={post.postId}
                  style={{ border: "1px solid #ccc", padding: "1rem",
                           marginBottom: "1rem", borderRadius: "8px" }}>
-              <strong>@{post.author}</strong>
+              <strong>
+                <Link to={`/user/${post.author}`}>@{post.author}</Link>
+              </strong>
+
               <p>{post.text}</p>
 
               {hashtagsArr.length > 0 && (
@@ -206,7 +213,9 @@ export default function FeedPage() {
                   {post.comments.map((c, i) => (
                     <div key={i}
                          style={{ fontSize: "0.85rem", marginTop: "0.2rem" }}>
-                      <strong>@{c.username}</strong>: {c.text}
+                      <strong>
+                        <Link to={`/user/${c.username}`}>@{c.username}</Link>
+                      </strong>
                     </div>
                   ))}
                 </div>

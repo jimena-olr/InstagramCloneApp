@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { resolveAvatar } from "../utils/avatar";
 
 export default function UserPage() {
   const [profile, setProfile]   = useState(null);
@@ -168,11 +169,12 @@ export default function UserPage() {
       {posts.length === 0 && <p>You haven't posted anything yet.</p>}
 
       {posts.map((post) => {
-        const imgSrc = post.imageUrl
-          ? post.imageUrl.startsWith("http")
-            ? post.imageUrl
-            : `http://localhost:3030${post.imageUrl}`
-          : null;
+        // const imgSrc = post.imageUrl
+        //   ? post.imageUrl.startsWith("http")
+        //     ? post.imageUrl
+        //     : `http://localhost:3030${post.imageUrl}`
+        //   : null;
+        const imgSrc = resolveAvatar(profile.profileImageUrl, `@${profile.username}`);
 
         return (
           <div key={post.postId}
@@ -180,8 +182,11 @@ export default function UserPage() {
             <p>{post.text}</p>
 
             {imgSrc && (
-              <img src={imgSrc} alt="post"
-                   style={{ display: "block", width: "300px", height: "auto", marginTop: "0.5rem" }} />
+              <img
+                src={imgSrc}
+                alt={`@${profile.username}`}
+                style={{ width:100, height:100, borderRadius:"50%", objectFit:"cover" }}
+              />
             )}
 
             {post.hashtags.length > 0 && (

@@ -275,33 +275,84 @@ export async function getPostsByUser(userId) {
 // }
 
 
-// rows come back { postId, author, text, imageUrl, hashtags, timestamp,
-//                  likeCount, liked }
-export async function getPostsForUser(viewerId) {
-  const db = get_db_connection();
-  const [rows] = await db.send_sql(
-    `SELECT
-        p.post_id                         AS postId,
-        u.username                        AS author,
-        p.text_content                    AS text,
-        p.image_url                       AS imageUrl,
-        JSON_EXTRACT(p.hashtag_text,'$')  AS hashtags,
-        p.timestamp,
-        COALESCE(lc.likeCount,0)          AS likeCount,
-        (pl.user_id IS NOT NULL)          AS liked
-     FROM posts p
-     JOIN users            u  ON u.user_id = p.author
-     LEFT JOIN (
-       SELECT post_id, COUNT(*) AS likeCount
-       FROM post_likes
-       GROUP BY post_id
-     ) lc ON lc.post_id = p.post_id
-     LEFT JOIN post_likes pl
-            ON pl.post_id = p.post_id
-           AND pl.user_id = ?           -- viewer
-     ORDER BY p.timestamp DESC
-     LIMIT 100`,
-    [viewerId]
-  );
-  return rows;
+// // rows come back { postId, author, text, imageUrl, hashtags, timestamp,
+// //                  likeCount, liked }
+// export async function getPostsForUser(viewerId) {
+//   const db = get_db_connection();
+//   const [rows] = await db.send_sql(
+//     `SELECT
+//         p.post_id                         AS postId,
+//         u.username                        AS author,
+//         p.text_content                    AS text,
+//         p.image_url                       AS imageUrl,
+//         JSON_EXTRACT(p.hashtag_text,'$')  AS hashtags,
+//         p.timestamp,
+//         COALESCE(lc.likeCount,0)          AS likeCount,
+//         (pl.user_id IS NOT NULL)          AS liked
+//      FROM posts p
+//      JOIN users            u  ON u.user_id = p.author
+//      LEFT JOIN (
+//        SELECT post_id, COUNT(*) AS likeCount
+//        FROM post_likes
+//        GROUP BY post_id
+//      ) lc ON lc.post_id = p.post_id
+//      LEFT JOIN post_likes pl
+//             ON pl.post_id = p.post_id
+//            AND pl.user_id = ?           -- viewer
+//      ORDER BY p.timestamp DESC
+//      LIMIT 100`,
+//     [viewerId]
+//   );
+//   return rows;
+// }
+
+export async function getPostsForUser(userId) {
+  try {
+    // Step 1: Get post_ids from ranked_feed for the given user, ordered by rank
+    const [rankedRows] = await db.send_sql(
+      "SELECT post_id FROM ranked_feed WHERE user_id = ? ORDER BY `rank` ASC",
+      [userId]
+    );
+
+    const postIds = rankedRows.map((row) => row.post_id);
+
+    if (postIds.length === 0) return [];
+
+    // Step 2: Fetch full post details for these ranked post IDs
+    const [posts] = await db.send_sql(
+      `SELECT p.post_id, p.text_content, p.timestamp, p.image_url, p.hashtag_text,
+              u.username AS author_username, u.profile_image_url,
+              COUNT(pl.user_id) AS likeCount
+         FROM posts p
+         JOIN users u ON p.author = u.user_id
+         LEFT JOIN post_likes pl ON p.post_id = pl.post_id
+        WHERE p.post_id IN (?)
+        GROUP BY p.post_id`,
+      [postIds]
+    );
+
+    // Step 3: Preserve original rank order
+    const postMap = new Map();
+    posts.forEach((post) => postMap.set(post.post_id, post));
+    const orderedPosts = postIds.map((id) => postMap.get(id)).filter(Boolean);
+
+    // Step 4: Attach comments
+    const commentsByPost = await getCommentsForPosts(postIds);
+
+    return orderedPosts.map((post) => ({
+      postId: post.post_id,
+      text: post.text_content,
+      timestamp: post.timestamp,
+      imageUrl: post.image_url,
+      author: post.author_username,
+      profileImage: post.profile_image_url,
+      likeCount: post.likeCount || 0,
+      hashtags: safeParseJSON(post.hashtag_text),
+      comments: commentsByPost[post.post_id] || []
+    }));
+  } catch (err) {
+    console.error("getPostsForUser error:", err);
+    return { error: "Failed to retrieve ranked posts" };
+  }
 }
+

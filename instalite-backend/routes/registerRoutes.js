@@ -8,6 +8,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 /* ---- handlers re‑exported from routes.js ---- */
 import {
   /* auth & search */
+  handleGetProfileByUsername,
   handleLogin,
   handleRegister,
   handleSearch,
@@ -196,4 +197,7 @@ export default function registerRoutes(app) {
 
   app.post("/post/:postId/like", requireSessionAuth, handleLikePost);
   app.delete("/post/:postId/like", requireSessionAuth, handleUnlikePost);
+
+  app.get("/user/:username", requireSessionAuth, handleGetProfileByUsername);
+
 }
