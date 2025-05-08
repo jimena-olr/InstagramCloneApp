@@ -1,3 +1,4 @@
+// src/pages/FeedPage.js
 import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -14,13 +15,13 @@ export default function FeedPage() {
   const [imageFile, setImageFile]           = useState(null);
   const [commentInputs, setCommentInputs]   = useState({});
 
-  const navigate = useNavigate();
-  const location = useLocation();
+  const navigate  = useNavigate();
+  const location  = useLocation();
 
-  // open "create post" modal via ?create=true
+  // open ?create=true modal
   useEffect(() => {
-    const p = new URLSearchParams(location.search);
-    if (p.get("create") === "true") {
+    const params = new URLSearchParams(location.search);
+    if (params.get("create") === "true") {
       setShowModal(true);
       navigate("/feed", { replace: true });
     }
@@ -37,15 +38,15 @@ export default function FeedPage() {
         if (!sessionUser) return navigate("/login");
         setCurrentUsername(sessionUser.username);
 
-        const r = await fetch("http://localhost:3030/feed", {
+        const r    = await fetch("http://localhost:3030/feed", {
           method: "POST",
           credentials: "include",
         });
-        const fd = await r.json();
-        if (!r.ok) throw new Error(fd.error || "Feed failed");
-        setPosts(fd);
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || "Feed failed");
+        setPosts(data);
       } catch (err) {
-        console.error("Feed fetch error:", err);
+        console.error(err);
         setError("Could not connect to server.");
       } finally {
         setLoading(false);
@@ -54,7 +55,7 @@ export default function FeedPage() {
     load();
   }, [navigate]);
 
-  // create a new post
+  // create post
   const handlePostSubmit = async (e) => {
     e.preventDefault();
     const form = new FormData();
@@ -74,19 +75,20 @@ export default function FeedPage() {
       setImageFile(null);
       setShowModal(false);
 
-      // refresh feed
-      const r = await fetch("http://localhost:3030/feed", {
+      // reload feed
+      const r    = await fetch("http://localhost:3030/feed", {
         method: "POST",
         credentials: "include",
       });
-      setPosts(await r.json());
+      const data = await r.json();
+      setPosts(data);
     } catch (err) {
       console.error("Post creation error:", err);
       alert("Error creating post.");
     }
   };
 
-  // submit a comment
+  // submit comment
   const handleSubmitComment = async (postId) => {
     const text = commentInputs[postId]?.trim();
     if (!text) return;
@@ -99,18 +101,19 @@ export default function FeedPage() {
       });
       setCommentInputs((p) => ({ ...p, [postId]: "" }));
 
-      // refresh feed
-      const r = await fetch("http://localhost:3030/feed", {
+      // reload feed to show new comment
+      const r    = await fetch("http://localhost:3030/feed", {
         method: "POST",
         credentials: "include",
       });
-      setPosts(await r.json());
+      const data = await r.json();
+      setPosts(data);
     } catch (err) {
       console.error("Comment submission error:", err);
     }
   };
 
-  // delete a post
+  // delete post
   const handleDeletePost = async (postId) => {
     if (!window.confirm("Delete this post?")) return;
     try {
@@ -119,14 +122,14 @@ export default function FeedPage() {
         credentials: "include",
       });
       if (!res.ok) throw new Error((await res.json()).error);
-      setPosts((p) => p.filter((x) => x.postId !== postId));
+      setPosts((prev) => prev.filter((x) => x.postId !== postId));
     } catch (err) {
       console.error("Delete error:", err);
       alert("Failed to delete post.");
     }
   };
 
-  // like/unlike a post
+  // toggle post like
   const handleToggleLike = async (postId, isLiked) => {
     const method = isLiked ? "DELETE" : "POST";
     try {
@@ -134,36 +137,47 @@ export default function FeedPage() {
         method,
         credentials: "include",
       });
-      // refresh feed
-      const r = await fetch("http://localhost:3030/feed", {
+      // reload feed for authoritative counts
+      const r    = await fetch("http://localhost:3030/feed", {
         method: "POST",
         credentials: "include",
       });
-      setPosts(await r.json());
+      const data = await r.json();
+      setPosts(data);
     } catch (err) {
       console.error("Like toggle failed:", err);
     }
   };
 
-  // like/unlike a comment
-  const handleToggleCommentLike = async (commentId, isLiked) => {
-    const method = isLiked ? "DELETE" : "POST";
+  // ─── NEW: toggle comment like ───────────────────────────────────────────
+  const handleToggleCommentLike = async (commentId, alreadyLiked) => {
+    const method = alreadyLiked ? "DELETE" : "POST";
     try {
       await fetch(`http://localhost:3030/comment/${commentId}/like`, {
         method,
         credentials: "include",
       });
-      // refresh feed
-      const r = await fetch("http://localhost:3030/feed", {
-        method: "POST",
-        credentials: "include",
-      });
-      setPosts(await r.json());
+      // Optimistic UI update:
+      setPosts((prev) =>
+        prev.map((post) => ({
+          ...post,
+          comments: post.comments.map((c) =>
+            c.commentId === commentId
+              ? {
+                  ...c,
+                  liked: !alreadyLiked,
+                  likeCount: c.likeCount + (alreadyLiked ? -1 : 1),
+                }
+              : c
+          ),
+        }))
+      );
     } catch (err) {
-      console.error("Comment-like toggle failed:", err);
+      console.error("Comment like toggle failed:", err);
     }
   };
 
+  // render
   if (loading) return <p>Loading posts…</p>;
   if (error) return <p style={{ color: "red" }}>{error}</p>;
 
@@ -176,13 +190,8 @@ export default function FeedPage() {
         <p>No live posts yet.</p>
       ) : (
         posts.map((post) => {
-          const avatar = resolveAvatar(
-            post.profileImageUrl,
-            `@${post.author}`
-          );
-          const tags = Array.isArray(post.hashtags)
-            ? post.hashtags
-            : [];
+          const avatar = resolveAvatar(post.profileImageUrl, `@${post.author}`);
+          const tags = Array.isArray(post.hashtags) ? post.hashtags : [];
 
           return (
             <div
@@ -195,9 +204,7 @@ export default function FeedPage() {
               }}
             >
               {/* avatar + author */}
-              <div
-                style={{ display: "flex", alignItems: "center", gap: 8 }}
-              >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <img
                   src={avatar}
                   alt={`@${post.author}`}
@@ -209,9 +216,7 @@ export default function FeedPage() {
                   }}
                 />
                 <strong>
-                  <Link to={`/user/${post.author}`}>
-                    @{post.author}
-                  </Link>
+                  <Link to={`/user/${post.author}`}>@{post.author}</Link>
                 </strong>
               </div>
 
@@ -245,25 +250,16 @@ export default function FeedPage() {
                       : `http://localhost:3030${post.imageUrl}`
                   }
                   alt="post"
-                  style={{
-                    display: "block",
-                    width: 300,
-                    height: "auto",
-                    marginTop: 8,
-                  }}
+                  style={{ display: "block", width: 300, marginTop: 8 }}
                 />
               )}
 
-              <small>
-                {new Date(post.timestamp).toLocaleString()}
-              </small>
+              <small>{new Date(post.timestamp).toLocaleString()}</small>
 
               {/* post like */}
               <div style={{ marginTop: 6, fontSize: "0.85rem" }}>
                 <button
-                  onClick={() =>
-                    handleToggleLike(post.postId, post.liked)
-                  }
+                  onClick={() => handleToggleLike(post.postId, post.liked)}
                   style={{
                     background: "#fff",
                     border: "1px solid #ccc",
@@ -279,40 +275,40 @@ export default function FeedPage() {
               </div>
 
               {/* comments */}
-              {(post.comments || []).length > 0 ? (
-                <div style={{ marginTop: 6 }}>
-                  {post.comments.map((c, i) => (
-                    <div
-                      key={i}
-                      style={{ fontSize: "0.85rem", marginTop: 4 }}
+              {post.comments.length > 0 ? (
+                post.comments.map((c) => (
+                  <div
+                    key={c.commentId}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      fontSize: "0.85rem",
+                      marginTop: 4,
+                    }}
+                  >
+                    <strong>
+                      <Link to={`/user/${c.username}`}>@{c.username}</Link>
+                    </strong>
+                    <span style={{ margin: "0 6px" }}>{c.text}</span>
+
+                    {/* comment like */}
+                    <button
+                      onClick={() =>
+                        handleToggleCommentLike(c.commentId, c.liked)
+                      }
+                      style={{
+                        marginLeft: "auto",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        color: c.liked ? "red" : "gray",
+                        fontSize: "1rem",
+                      }}
                     >
-                      <strong>
-                        <Link to={`/user/${c.username}`}>
-                          @{c.username}
-                        </Link>
-                      </strong>
-                      : {c.text}{" "}
-                      <button
-                        onClick={() =>
-                          handleToggleCommentLike(
-                            c.commentId,
-                            c.liked
-                          )
-                        }
-                        style={{
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          color: c.liked ? "red" : "gray",
-                          marginLeft: 8,
-                        }}
-                      >
-                        {c.liked ? "❤️" : "🤍"}{" "}
-                        {c.likeCount || 0}
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                      {c.liked ? "❤️" : "🤍"} {c.likeCount || 0}
+                    </button>
+                  </div>
+                ))
               ) : (
                 <p
                   style={{
@@ -336,14 +332,12 @@ export default function FeedPage() {
                   }))
                 }
                 onKeyDown={(e) =>
-                  e.key === "Enter" &&
-                  handleSubmitComment(post.postId)
+                  e.key === "Enter" && handleSubmitComment(post.postId)
                 }
                 style={{ marginTop: 6, width: "100%", padding: "6px" }}
               />
 
-              {post.author.toLowerCase() ===
-                currentUsername.toLowerCase() && (
+              {post.author.toLowerCase() === currentUsername.toLowerCase() && (
                 <button
                   onClick={() => handleDeletePost(post.postId)}
                   style={{
@@ -353,6 +347,7 @@ export default function FeedPage() {
                     color: "#aa0000",
                     padding: "4px 10px",
                     borderRadius: 4,
+                    cursor: "pointer",
                   }}
                 >
                   Delete Post

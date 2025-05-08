@@ -111,32 +111,76 @@ export async function deleteComment(commentId, userId) {
   }
 }
 
-export async function getCommentsForPosts(postIds) {
+// export async function getCommentsForPosts(postIds) {
+//   const db = get_db_connection();
+
+//   if (!Array.isArray(postIds) || postIds.length === 0) {
+//     return {}; // 🔒 early return to avoid SQL error
+//   }
+
+//   const placeholders = postIds.map(() => '?').join(',');
+//   const [rows] = await db.send_sql(
+//     `SELECT c.post_id, c.text_content, c.timestamp, u.username
+//      FROM comments c
+//      JOIN users u ON c.user_id = u.user_id
+//      WHERE c.post_id IN (${placeholders})
+//      ORDER BY c.timestamp ASC`,
+//     postIds
+//   );
+
+//   const commentsByPost = {};
+//   for (const row of rows) {
+//     if (!commentsByPost[row.post_id]) commentsByPost[row.post_id] = [];
+//     commentsByPost[row.post_id].push({
+//       username: row.username,
+//       text: row.text_content,
+//       timestamp: row.timestamp,
+//     });
+//   }
+
+//   return commentsByPost;
+// }
+
+export async function getCommentsForPosts(postIds, viewerId) {
+  if (!postIds.length) return {};
   const db = get_db_connection();
-
-  if (!Array.isArray(postIds) || postIds.length === 0) {
-    return {}; // 🔒 early return to avoid SQL error
-  }
-
-  const placeholders = postIds.map(() => '?').join(',');
   const [rows] = await db.send_sql(
-    `SELECT c.post_id, c.text_content, c.timestamp, u.username
-     FROM comments c
-     JOIN users u ON c.user_id = u.user_id
-     WHERE c.post_id IN (${placeholders})
-     ORDER BY c.timestamp ASC`,
-    postIds
+    `
+    SELECT
+      c.comment_id,
+      c.post_id,
+      u.username,
+      c.text_content AS text,
+      c.timestamp,
+      COUNT(cl.user_id) AS likeCount,
+      EXISTS(
+        SELECT 1
+          FROM comment_likes cl2
+         WHERE cl2.comment_id = c.comment_id
+           AND cl2.user_id = ?
+      ) AS liked
+    FROM comments c
+    JOIN users u
+      ON u.user_id = c.user_id
+    LEFT JOIN comment_likes cl
+      ON cl.comment_id = c.comment_id
+    WHERE c.post_id IN (?)
+    GROUP BY c.comment_id
+    ORDER BY c.timestamp ASC
+    `,
+    [viewerId, postIds]
   );
 
-  const commentsByPost = {};
-  for (const row of rows) {
-    if (!commentsByPost[row.post_id]) commentsByPost[row.post_id] = [];
-    commentsByPost[row.post_id].push({
-      username: row.username,
-      text: row.text_content,
-      timestamp: row.timestamp,
+  return rows.reduce((acc, r) => {
+    if (!acc[r.post_id]) acc[r.post_id] = [];
+    acc[r.post_id].push({
+      commentId: r.comment_id,
+      username:  r.username,
+      text:      r.text,
+      timestamp: r.timestamp,
+      likeCount: Number(r.likeCount),
+      liked:     Boolean(r.liked),
     });
-  }
-
-  return commentsByPost;
+    return acc;
+  }, {});
 }

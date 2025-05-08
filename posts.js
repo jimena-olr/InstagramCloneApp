@@ -157,7 +157,7 @@ export async function getPostsByUser(authorId, viewerId) {
     if (posts.length === 0) return [];
 
     const postIds = posts.map((r) => r.post_id);
-    const commentsByPost = await getCommentsForPosts(postIds);
+    const commentsByPost = await getCommentsForPosts(postIds, viewerId);
 
     return posts.map((post) => ({
       postId: post.post_id,

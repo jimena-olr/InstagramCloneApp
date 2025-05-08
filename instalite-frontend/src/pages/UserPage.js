@@ -1,3 +1,4 @@
+// src/pages/UserPage.js
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { resolveAvatar } from "../utils/avatar";
@@ -8,7 +9,7 @@ export default function UserPage() {
   const [commentInputs, setCommentInputs] = useState({});
   const navigate = useNavigate();
 
-  // load your profile + posts
+  // ─── Load your profile + posts ───────────────────────────────
   useEffect(() => {
     async function fetchProfile() {
       try {
@@ -25,7 +26,7 @@ export default function UserPage() {
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || "Failed to load profile");
 
-        // cache your avatar for layout/sidebar
+        // cache avatar for sidebar/layout
         if (data.profileImageUrl) {
           const abs = data.profileImageUrl.startsWith("http")
             ? data.profileImageUrl
@@ -42,7 +43,7 @@ export default function UserPage() {
     fetchProfile();
   }, [navigate]);
 
-  // post comment helper
+  // ─── Post a comment ──────────────────────────────────────────
   const handleCommentChange = (postId, v) =>
     setCommentInputs((p) => ({ ...p, [postId]: v }));
 
@@ -58,7 +59,7 @@ export default function UserPage() {
       });
       setCommentInputs((p) => ({ ...p, [postId]: "" }));
 
-      // refresh your profile
+      // re-fetch profile to show new comment
       const r2 = await fetch("http://localhost:3030/user", {
         method: "POST",
         credentials: "include",
@@ -71,7 +72,7 @@ export default function UserPage() {
     }
   };
 
-  // delete a post
+  // ─── Delete a post ───────────────────────────────────────────
   const handleDeletePost = async (postId) => {
     if (!window.confirm("Delete this post?")) return;
     try {
@@ -90,16 +91,18 @@ export default function UserPage() {
     }
   };
 
-  // like/unlike a post
+  // ─── Toggle post like ────────────────────────────────────────
   const handleToggleLike = async (postId) => {
+    // optimistic UI
     setProfile((p) => ({
       ...p,
       posts: p.posts.map((x) =>
         x.postId === postId
-          ? { ...x, liked: !x.liked, likeCount: x.likeCount + (x.liked ? -1 : 1) }
+          ? { ...x, liked: !x.liked, likeCount: x.liked ? x.likeCount - 1 : x.likeCount + 1 }
           : x
       ),
     }));
+    // persist & re-sync with server
     const post = profile.posts.find((x) => x.postId === postId);
     const method = post.liked ? "DELETE" : "POST";
     try {
@@ -109,7 +112,6 @@ export default function UserPage() {
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Like failed");
-      // sync with server
       setProfile((p) => ({
         ...p,
         posts: p.posts.map((x) =>
@@ -120,19 +122,17 @@ export default function UserPage() {
       }));
     } catch (err) {
       console.error("Like toggle failed:", err);
-      // rollback
+      // rollback if needed
       setProfile((p) => ({
         ...p,
         posts: p.posts.map((x) =>
-          x.postId === postId
-            ? { ...x, liked: post.liked, likeCount: post.likeCount }
-            : x
+          x.postId === postId ? post : x
         ),
       }));
     }
   };
 
-  // like/unlike a comment
+  // ─── Toggle comment like (NEW) ───────────────────────────────
   const handleToggleCommentLike = async (commentId, isLiked) => {
     const method = isLiked ? "DELETE" : "POST";
     try {
@@ -140,14 +140,22 @@ export default function UserPage() {
         method,
         credentials: "include",
       });
-      // refresh profile
-      const r2 = await fetch("http://localhost:3030/user", {
-        method: "POST",
-        credentials: "include",
-      });
-      const data2 = await r2.json();
-      if (!r2.ok) throw new Error(data2.error || "Reload failed");
-      setProfile(data2);
+      // optimistic update in-place
+      setProfile((p) => ({
+        ...p,
+        posts: p.posts.map((post) => ({
+          ...post,
+          comments: post.comments.map((c) =>
+            c.commentId === commentId
+              ? {
+                  ...c,
+                  liked: !isLiked,
+                  likeCount: c.likeCount + (isLiked ? -1 : 1),
+                }
+              : c
+          ),
+        })),
+      }));
     } catch (err) {
       console.error("Comment-like toggle failed:", err);
     }
@@ -156,35 +164,17 @@ export default function UserPage() {
   if (error) return <div style={{ color: "red" }}>{error}</div>;
   if (!profile) return <p>Loading…</p>;
 
-  const {
-    username,
-    followerCount,
-    followingCount,
-    posts,
-    profileImageUrl,
-  } = profile;
+  const { username, followerCount, followingCount, posts, profileImageUrl } = profile;
   const avatarSrc = resolveAvatar(profileImageUrl, `@${username}`);
 
   return (
     <div style={{ padding: "2rem" }}>
       {/* header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 16,
-          marginBottom: 24,
-        }}
-      >
+      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
         <img
           src={avatarSrc}
           alt={`@${username}`}
-          style={{
-            width: 100,
-            height: 100,
-            borderRadius: "50%",
-            objectFit: "cover",
-          }}
+          style={{ width: 100, height: 100, borderRadius: "50%", objectFit: "cover" }}
         />
         <button
           onClick={() => navigate("/profile")}
@@ -209,31 +199,19 @@ export default function UserPage() {
       {posts.length === 0 && <p>You haven't posted anything yet.</p>}
 
       {posts.map((post) => (
-        <div
-          key={post.postId}
-          style={{
-            border: "1px solid #ccc",
-            padding: "1rem",
-            marginBottom: "1rem",
-            borderRadius: 8,
-          }}
-        >
+        <div key={post.postId} style={{ border: "1px solid #ccc", padding: "1rem", marginBottom: "1rem", borderRadius: 8 }}>
           <p>{post.text}</p>
 
           {post.imageUrl && (
             <img
-              src={
-                post.imageUrl.startsWith("http")
-                  ? post.imageUrl
-                  : `http://localhost:3030${post.imageUrl}`
-              }
+              src={post.imageUrl.startsWith("http") ? post.imageUrl : `http://localhost:3030${post.imageUrl}`}
               alt="post"
-              style={{ width: 300, height: "auto", marginTop: "0.5rem" }}
+              style={{ width: 300, marginTop: 8 }}
             />
           )}
 
           {post.hashtags.length > 0 && (
-            <div style={{ marginTop: "0.5rem" }}>
+            <div style={{ marginTop: 8 }}>
               {post.hashtags.map((tag, i) => (
                 <span
                   key={i}
@@ -241,7 +219,7 @@ export default function UserPage() {
                     display: "inline-block",
                     background: "#e0e0e0",
                     borderRadius: 12,
-                    padding: "0.2rem 0.6rem",
+                    padding: "2px 8px",
                     marginRight: 6,
                     fontSize: "0.8rem",
                   }}
@@ -258,38 +236,21 @@ export default function UserPage() {
           <div style={{ marginTop: 6, fontSize: "0.85rem" }}>
             <button
               onClick={() => handleToggleLike(post.postId)}
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                fontSize: "1rem",
-                color: post.liked ? "red" : "black",
-              }}
+              style={{ background: "none", border: "none", cursor: "pointer", color: post.liked ? "red" : "black" }}
             >
               ❤️ {post.likeCount}
             </button>
           </div>
 
-          {/* comments with like */}
-          {(post.comments || []).map((c, i) => (
-            <div
-              key={i}
-              style={{ marginTop: "0.5rem", fontSize: "0.9rem" }}
-            >
-              <strong>@{c.username}</strong>: {c.text}{" "}
+          {/* comments with like/unlike */}
+          {post.comments.map((c) => (
+            <div key={c.commentId} style={{ display: "flex", alignItems: "center", marginTop: 8 }}>
+              <strong>@{c.username}</strong>: <span style={{ marginLeft: 4 }}>{c.text}</span>
               <button
-                onClick={() =>
-                  handleToggleCommentLike(c.commentId, c.liked)
-                }
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: c.liked ? "red" : "black",
-                  marginLeft: 8,
-                }}
+                onClick={() => handleToggleCommentLike(c.commentId, c.liked)}
+                style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: c.liked ? "red" : "black" }}
               >
-                {c.liked ? "❤️" : "🤍"} {c.likeCount || 0}
+                {c.liked ? "❤️" : "🤍"} {c.likeCount}
               </button>
             </div>
           ))}
@@ -298,26 +259,14 @@ export default function UserPage() {
             type="text"
             placeholder="Write a comment…"
             value={commentInputs[post.postId] || ""}
-            onChange={(e) =>
-              handleCommentChange(post.postId, e.target.value)
-            }
-            onKeyDown={(e) =>
-              e.key === "Enter" && submitComment(post.postId)
-            }
-            style={{ marginTop: "0.5rem", width: "100%", padding: "0.4rem" }}
+            onChange={(e) => handleCommentChange(post.postId, e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submitComment(post.postId)}
+            style={{ marginTop: 8, width: "100%", padding: "6px" }}
           />
 
           <button
             onClick={() => handleDeletePost(post.postId)}
-            style={{
-              marginTop: "0.5rem",
-              background: "#ffdddd",
-              border: "1px solid #ffaaaa",
-              color: "#aa0000",
-              padding: "0.3rem 0.6rem",
-              borderRadius: 4,
-              cursor: "pointer",
-            }}
+            style={{ marginTop: 8, background: "#ffdddd", border: "1px solid #ffaaaa", color: "#aa0000", padding: "4px 10px", borderRadius: 4, cursor: "pointer" }}
           >
             Delete Post
           </button>
