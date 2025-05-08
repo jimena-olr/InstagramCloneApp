@@ -93,18 +93,27 @@ export default function UserPage() {
 
   // ─── Toggle post like ────────────────────────────────────────
   const handleToggleLike = async (postId) => {
-    // optimistic UI
-    setProfile((p) => ({
-      ...p,
-      posts: p.posts.map((x) =>
-        x.postId === postId
-          ? { ...x, liked: !x.liked, likeCount: x.liked ? x.likeCount - 1 : x.likeCount + 1 }
-          : x
-      ),
-    }));
-    // persist & re-sync with server
-    const post = profile.posts.find((x) => x.postId === postId);
-    const method = post.liked ? "DELETE" : "POST";
+    let currentLiked;
+  
+    // Optimistic UI update with access to fresh value
+    setProfile((prev) => {
+      const updatedPosts = prev.posts.map((post) => {
+        if (post.postId === postId) {
+          currentLiked = post.liked;  // capture value before flipping
+          return {
+            ...post,
+            liked: !post.liked,
+            likeCount: post.liked ? post.likeCount - 1 : post.likeCount + 1
+          };
+        }
+        return post;
+      });
+      return { ...prev, posts: updatedPosts };
+    });
+  
+    // Use captured `currentLiked` to determine correct method
+    const method = currentLiked ? "DELETE" : "POST";
+  
     try {
       const r = await fetch(`http://localhost:3030/post/${postId}/like`, {
         method,
@@ -112,9 +121,11 @@ export default function UserPage() {
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Like failed");
-      setProfile((p) => ({
-        ...p,
-        posts: p.posts.map((x) =>
+  
+      // Sync exact count and state from backend
+      setProfile((prev) => ({
+        ...prev,
+        posts: prev.posts.map((x) =>
           x.postId === postId
             ? { ...x, liked: d.liked, likeCount: d.likeCount }
             : x
@@ -122,15 +133,23 @@ export default function UserPage() {
       }));
     } catch (err) {
       console.error("Like toggle failed:", err);
-      // rollback if needed
-      setProfile((p) => ({
-        ...p,
-        posts: p.posts.map((x) =>
-          x.postId === postId ? post : x
+      // Rollback optimistic update
+      setProfile((prev) => ({
+        ...prev,
+        posts: prev.posts.map((post) =>
+          post.postId === postId
+            ? {
+                ...post,
+                liked: currentLiked,
+                likeCount: currentLiked ? post.likeCount + 1 : post.likeCount - 1,
+              }
+            : post
         ),
       }));
     }
   };
+  
+  
 
   // ─── Toggle comment like (NEW) ───────────────────────────────
   const handleToggleCommentLike = async (commentId, isLiked) => {
