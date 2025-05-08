@@ -288,3 +288,47 @@ export async function getPostsForUser(userId) {
     return { error: "Failed to retrieve ranked posts" };
   }
 }
+
+// export async function getCommentsForPosts(postIds, viewerId) {
+//   if (!postIds.length) return {};
+//   const db = get_db_connection();
+//   const [rows] = await db.send_sql(
+//     `
+//     SELECT
+//       c.comment_id,
+//       c.post_id,
+//       u.username,
+//       c.text_content AS text,
+//       c.timestamp,
+//       COUNT(cl.user_id) AS likeCount,
+//       EXISTS(
+//         SELECT 1
+//           FROM comment_likes cl2
+//          WHERE cl2.comment_id = c.comment_id
+//            AND cl2.user_id = ?
+//       ) AS liked
+//     FROM comments c
+//     JOIN users u
+//       ON u.user_id = c.user_id
+//     LEFT JOIN comment_likes cl
+//       ON cl.comment_id = c.comment_id
+//     WHERE c.post_id IN (?)
+//     GROUP BY c.comment_id
+//     ORDER BY c.timestamp ASC
+//     `,
+//     [viewerId, postIds]
+//   );
+
+//   return rows.reduce((acc, r) => {
+//     if (!acc[r.post_id]) acc[r.post_id] = [];
+//     acc[r.post_id].push({
+//       commentId: r.comment_id,
+//       username:  r.username,
+//       text:      r.text,
+//       timestamp: r.timestamp,
+//       likeCount: Number(r.likeCount),
+//       liked:     Boolean(r.liked),
+//     });
+//     return acc;
+//   }, {});
+// }

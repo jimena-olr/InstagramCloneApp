@@ -35,6 +35,8 @@ import {
   handleLogout,
   handleLikePost,
   handleUnlikePost,
+  handleLikeComment, 
+  handleUnlikeComment,
 
   /* feed / profile / posts */
   handleGetFeed,
@@ -228,5 +230,8 @@ export default function registerRoutes(app) {
 
   app.get("/user/:username", requireSessionAuth, handleGetProfileByUsername);
   app.post("/post/comment", requireSessionAuth, handlePostComment);
+
+  app.post   ("/comment/:commentId/like",   requireSessionAuth, handleLikeComment);
+  app.delete ("/comment/:commentId/like",   requireSessionAuth, handleUnlikeComment);
 
 }

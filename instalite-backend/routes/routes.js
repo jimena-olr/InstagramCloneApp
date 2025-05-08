@@ -734,3 +734,43 @@ export async function handleUnlikePost(req, res) {
     return res.status(500).json({ error: "Database error" });
   }
 }
+
+export async function handleLikeComment(req, res) {
+  const userId    = req.session.user.userId;
+  const commentId = Number(req.params.commentId);
+  try {
+    const db = get_db_connection();
+    await db.send_sql(
+      `INSERT IGNORE INTO comment_likes (comment_id, user_id) VALUES (?, ?)`,
+      [commentId, userId]
+    );
+    const [[{ likeCount }]] = await db.send_sql(
+      `SELECT COUNT(*) AS likeCount FROM comment_likes WHERE comment_id = ?`,
+      [commentId]
+    );
+    res.json({ success: true, liked: true,  likeCount });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to like comment" });
+  }
+}
+
+export async function handleUnlikeComment(req, res) {
+  const userId    = req.session.user.userId;
+  const commentId = Number(req.params.commentId);
+  try {
+    const db = get_db_connection();
+    await db.send_sql(
+      `DELETE FROM comment_likes WHERE comment_id = ? AND user_id = ?`,
+      [commentId, userId]
+    );
+    const [[{ likeCount }]] = await db.send_sql(
+      `SELECT COUNT(*) AS likeCount FROM comment_likes WHERE comment_id = ?`,
+      [commentId]
+    );
+    res.json({ success: true, liked: false, likeCount });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to unlike comment" });
+  }
+}
