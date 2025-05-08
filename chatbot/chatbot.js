@@ -8,6 +8,10 @@ import {
   retrieveRelevantDocs,
   ensureRetrieversReady
 } from "../installite-backend/utils/vector.js";
+import {
+  searchUsersByQuery,
+  searchPostsByQuery
+} from "../server/models/rag_helpers.js";
 
 const template = `
 Answer the question based on the following context:
@@ -34,9 +38,30 @@ const model = new ChatOpenAI({
 export async function callChatbot(query) {
   await ensureRetrieversReady();
 
+  // 1. Retrieve vector-based documents
   const docs = await retrieveRelevantDocs(query);
-  const context = docs.map(d => d.pageContent).join("\n\n");
+  const vectorText = docs.map(d => d.pageContent).join("\n\n");
 
+  // 2. Retrieve SQL matches
+  const [users, posts] = await Promise.all([
+    searchUsersByQuery(query),
+    searchPostsByQuery(query)
+  ]);
+
+  const userText = users.length
+    ? "Matched Users:\n" + users.map(u => `• ${u.username}`).join("\n")
+    : "";
+
+  const postText = posts.length
+    ? "Matched Posts:\n" + posts.map(p => `• ${p.text_content}`).join("\n")
+    : "";
+
+  // 3. Combine everything into the context string
+  const context = [vectorText, userText, postText]
+    .filter(part => part.trim().length > 0)
+    .join("\n\n");
+
+  // 4. Format prompt and query model
   const filledPrompt = await prompt.format({ context, question: query });
   const response = await model.call([{ role: "user", content: filledPrompt }]);
 
