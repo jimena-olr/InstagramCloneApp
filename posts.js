@@ -277,7 +277,7 @@ export async function getPostsForUser(userId) {
       timestamp: post.timestamp,
       imageUrl: post.image_url,
       author: post.author_username,
-      profileImage: post.profile_image_url,
+      profileImageUrl: post.profile_image_url,
       likeCount: post.likeCount || 0,
       liked: !!post.liked,
       hashtags: safeParseJSON(post.hashtag_text),
