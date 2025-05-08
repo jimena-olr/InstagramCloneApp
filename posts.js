@@ -134,25 +134,26 @@ export async function getPostsByUser(userId) {
     const db = await get_db_connection().connect();
 
     // 1) Pull everything, aliasing columns to JS-friendly names:
-    const [rows] = await db.send_sql(
+    const [posts] = await db.send_sql(
       `SELECT
-         p.post_id                AS postId,
-         p.text_content           AS text,
-         p.timestamp              AS timestamp,
-         p.image_url              AS imageUrl,
-         JSON_UNQUOTE(p.hashtag_text) AS hashtagsJson,
-         COUNT(pl.user_id)        AS likeCount,
-         u.username               AS authorUsername,
-         u.profile_image_url      AS profileImageUrl
+         p.post_id,
+         p.text_content,
+         p.timestamp,
+         p.image_url,
+         p.hashtag_text,
+         u.username AS author_username,
+         u.profile_image_url,
+         COUNT(pl.user_id) AS likeCount,
+         EXISTS (
+           SELECT 1 FROM post_likes pl2
+           WHERE pl2.post_id = p.post_id AND pl2.user_id = ?
+         ) AS liked
        FROM posts p
-       JOIN users u
-         ON p.author = u.user_id
-       LEFT JOIN post_likes pl
-         ON p.post_id = pl.post_id
-       WHERE p.author = ?
-       GROUP BY p.post_id
-       ORDER BY p.timestamp DESC`,
-      [userId]
+       JOIN users u ON p.author = u.user_id
+       LEFT JOIN post_likes pl ON p.post_id = pl.post_id
+       WHERE p.post_id IN (?)
+       GROUP BY p.post_id`,
+      [userId, postIds]
     );
 
     // If no posts, just return empty array
@@ -163,16 +164,17 @@ export async function getPostsByUser(userId) {
     const commentsByPost = await getCommentsForPosts(postIds);
 
     // 3) Build the final JS objects
-    return rows.map((r) => ({
-      postId:         r.postId,
-      text:           r.text,
-      timestamp:      r.timestamp,
-      imageUrl:       r.imageUrl,        // <-- this will now be a real URL
-      authorUsername: r.authorUsername,
-      profileImageUrl:r.profileImageUrl, // <-- so you can render the poster’s avatar too
-      likeCount:      r.likeCount || 0,
-      hashtags:       JSON.parse(r.hashtagsJson || '[]'),
-      comments:       commentsByPost[r.postId] || []
+    return orderedPosts.map((post) => ({
+      postId: post.post_id,
+      text: post.text_content,
+      timestamp: post.timestamp,
+      imageUrl: post.image_url,
+      author: post.author_username,
+      profileImage: post.profile_image_url,
+      likeCount: post.likeCount || 0,
+      liked: Boolean(post.liked),
+      hashtags: safeParseJSON(post.hashtag_text),
+      comments: commentsByPost[post.post_id] || [],
     }));
   } catch (err) {
     console.error("getPostsByUser error:", err);
@@ -194,15 +196,24 @@ export async function getPostsForUser(userId) {
 
     // Step 2: Fetch full post details for these ranked post IDs
     const [posts] = await db.send_sql(
-      `SELECT p.post_id, p.text_content, p.timestamp, p.image_url, p.hashtag_text,
-              u.username AS author_username, u.profile_image_url,
-              COUNT(pl.user_id) AS likeCount
+      `SELECT p.post_id,
+              p.text_content,
+              p.timestamp,
+              p.image_url,
+              p.hashtag_text,
+              u.username AS author_username,
+              u.profile_image_url,
+              COUNT(pl.user_id) AS likeCount,
+              EXISTS (
+                SELECT 1 FROM post_likes pl2
+                WHERE pl2.post_id = p.post_id AND pl2.user_id = ?
+              ) AS liked
          FROM posts p
          JOIN users u ON p.author = u.user_id
          LEFT JOIN post_likes pl ON p.post_id = pl.post_id
         WHERE p.post_id IN (?)
         GROUP BY p.post_id`,
-      [postIds]
+      [userId, postIds]  
     );
 
     // Step 3: Preserve original rank order
@@ -219,9 +230,9 @@ export async function getPostsForUser(userId) {
       timestamp: post.timestamp,
       imageUrl: post.image_url,
       author: post.author_username,
-      profileImage: post.profile_image,
+      profileImage: post.profile_image_url,
       likeCount: post.likeCount || 0,
-      liked: Boolean(post.liked),
+      liked: !!post.liked,
       hashtags: safeParseJSON(post.hashtag_text),
       comments: commentsByPost[post.post_id] || []
     }));
