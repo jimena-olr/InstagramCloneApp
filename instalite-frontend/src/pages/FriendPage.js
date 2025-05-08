@@ -77,6 +77,24 @@ export default function FriendPage() {
                 <img src={imgSrc} alt="post"
                      style={{ maxWidth:"100%", marginTop:8 }}/>
               )}
+              {Array.isArray(post.hashtags) && post.hashtags.length > 0 && (
+              <div style={{ marginTop: "0.5rem" }}>
+                {post.hashtags.map((tag, i) => (
+                  <span key={i}
+                        style={{
+                          display: "inline-block",
+                          background: "#e0e0e0",
+                          borderRadius: 12,
+                          padding: "0.2rem 0.6rem",
+                          marginRight: 6,
+                          fontSize: "0.8rem"
+                        }}>
+                    {tag.startsWith("#") ? tag : `#${tag}`}
+                  </span>
+                ))}
+              </div>
+            )}
+
               <div style={{ marginTop:4, fontSize:"0.85rem" }}>
               <button
                 onClick={() => handleToggleLike(post.postId, post.liked)}
