@@ -52,8 +52,10 @@ await dbaccess.create_tables("SET FOREIGN_KEY_CHECKS = 1;");
   await dbaccess.create_tables('CREATE TABLE IF NOT EXISTS friends ( \
     follower INT, \
     following INT, \
+    PRIMARY KEY (follower, following), \
     FOREIGN KEY (follower) REFERENCES users(user_id), \
-    FOREIGN KEY (following) REFERENCES users(user_id) \
+    FOREIGN KEY (following) REFERENCES users(user_id), \
+    CONSTRAINT chk_no_self_follow CHECK (follower <> following) \
     );')
 
   await dbaccess.create_tables("CREATE TABLE IF NOT EXISTS posts ( \
@@ -82,19 +84,19 @@ await dbaccess.create_tables("SET FOREIGN_KEY_CHECKS = 1;");
     chat_name VARCHAR(255) DEFAULT NULL \
   );");
 
-  await dbaccess.create_tables("CREATE TABLE IF NOT EXISTS chat_messages ( \
-    message_id       INT NOT NULL AUTO_INCREMENT PRIMARY KEY, \
-    chat_session_id  INT NOT NULL, \
-    user_id          INT NOT NULL, \
-    text_content     TEXT, \
-    timestamp        TIMESTAMP DEFAULT CURRENT_TIMESTAMP, \
-    FOREIGN KEY (chat_session_id) \
-      REFERENCES chat_sessions(chat_session_id) \
-      ON DELETE CASCADE, \
-    FOREIGN KEY (user_id) \
-      REFERENCES users(user_id) \
-      ON DELETE CASCADE \
-  );");
+  await dbaccess.create_tables(`CREATE TABLE IF NOT EXISTS chat_messages (
+    message_id       INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    chat_session_id  INT NOT NULL,
+    user_id          INT NOT NULL,
+    text_content     TEXT,
+    timestamp        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (chat_session_id)
+      REFERENCES chat_sessions(chat_session_id)
+      ON DELETE CASCADE,
+    FOREIGN KEY (user_id)
+      REFERENCES users(user_id)
+      ON DELETE CASCADE
+  );`);
 
   await dbaccess.create_tables("CREATE TABLE IF NOT EXISTS comments ( \
     comment_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, \

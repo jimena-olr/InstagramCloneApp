@@ -1,92 +1,102 @@
 // src/pages/UserSearchPage.js
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from 'react';
+import UserListItem from '../components/UserListItem.jsx';
 
 export default function UserSearchPage() {
-  const [q, setQ] = useState("");
+  const [query, setQuery]     = useState('');
   const [results, setResults] = useState([]);
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
 
-  // 1) On mount, verify that the session is valid
   useEffect(() => {
-    fetch("http://localhost:3030/session", {
-      credentials: "include",
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (!data.sessionUser) navigate("/login");
-      })
-      .catch(() => navigate("/login"));
-  }, [navigate]);
-
-  // 2) Grab your userId (must be set at login)
-  const uid = localStorage.getItem("userId");
-
-  // 3) Form submit -> call /users/search
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setResults([]);
+    if (!query.trim()) {
+      setResults([]);
+      return;
+    }
     setLoading(true);
 
-    try {
-      const res = await fetch(
-        `http://localhost:3030/users/search?userId=${uid}&q=${encodeURIComponent(
-          q
-        )}`,
-        {
-          credentials: "include",
+    fetch(`http://localhost:3030/users/search?q=${encodeURIComponent(query)}`, {
+      credentials: 'include'
+    })
+      .then(res => {
+        setLoading(false);
+        if (!res.ok) {
+          setResults([]);
+          return [];
         }
-      );
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || res.statusText);
-      }
-      setResults(data);
-    } catch (err) {
-      console.error("Search error:", err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+        return res.json();
+      })
+      .then(data => {
+        setResults(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        setLoading(false);
+        setResults([]);
+      });
+  }, [query]);
 
   return (
-    <div style={{ padding: 20 }}>
-      <h2>User Search</h2>
-
-      <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        padding: '32px 16px',
+        backgroundColor: '#f0f2f5',
+        minHeight: '100vh',
+        boxSizing: 'border-box'
+      }}
+    >
+      <div style={{ width: '100%', maxWidth: 500 }}>
         <input
           type="text"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Type a name or username…"
-          required
-          style={{ width: "60%", padding: 8 }}
+          placeholder="Search users"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          style={{
+            width: '100%',
+            padding: '12px 16px',
+            fontSize: 18,
+            borderRadius: 24,
+            border: '1px solid #ccc',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            outline: 'none',
+            boxSizing: 'border-box'
+          }}
         />
-        <button type="submit" style={{ marginLeft: 8, padding: 8 }}>
-          {loading ? "Searching…" : "Search"}
-        </button>
-      </form>
+      </div>
 
-      {error && <div style={{ color: "red" }}>Error: {error}</div>}
-
-      {!error && results.length > 0 && (
-        <ul style={{ listStyle: "none", padding: 0 }}>
-          {results.map((u) => (
-            <li key={u.userId}>
-              {u.firstName} {u.lastName} (@{u.username})
-            </li>
-          ))}
-        </ul>
+      {loading && (
+        <div style={{ marginTop: 24, fontSize: 16, color: '#555' }}>
+          Loading…
+        </div>
+      )}
+      {!loading && results.length === 0 && query && (
+        <div style={{ marginTop: 24, fontSize: 16, color: '#555' }}>
+          No users found
+        </div>
       )}
 
-      {!error && !loading && q.trim() !== "" && results.length === 0 && (
-        <div><em>No users found</em></div>
-      )}
+      <div
+        style={{
+          marginTop: 24,
+          width: '100%',
+          maxWidth: 500,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center'
+        }}
+      >
+        {results.map(user => (
+          <UserListItem
+            key={user.userId}
+            userId={user.userId}
+            username={user.username}
+            firstName={user.firstName}
+            lastName={user.lastName}
+            initiallyFollowing={user.initiallyFollowing}
+          />
+        ))}
+      </div>
     </div>
   );
 }

@@ -79,7 +79,7 @@ let retriever = null;
 let reviewRetriever = null;
 
 export async function loadRetrievers() {
-  const embeddings = new OpenAIEmbeddings({ modelName: "text-embedding-ada-002" });
+  const embeddings = new OpenAIEmbeddings({ modelName: "text-embedding-3-small" });
   const CHROMA_URL = process.env.CHROMA_URL || "http://localhost:8000";
 
   const actorStore = await Chroma.fromExistingCollection(embeddings, {

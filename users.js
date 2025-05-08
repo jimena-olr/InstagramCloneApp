@@ -229,29 +229,27 @@ export async function updateBirthday(userId, birthday) {
   }
 }
 
-export async function updateUserProfileImageUrl(userId, imageUrl) {
-  try {
-    const db = await get_db_connection().connect();
-    await db.send_sql(
-      "UPDATE users SET profile_image_url = ? WHERE user_id = ?",
-      [imageUrl, userId]
-    );
-    return { success: true };
-  } catch (err) {
-    console.error("updateUserProfileImageUrl error:", err);
-    return { error: "Failed to update profile image URL" };
-  }
-}
-
-export async function updateUserLinkedActor(userId, actorId) {
-  const db = await get_db_connection().connect();
-  await db.send_sql(
-    "UPDATE users SET linked_actor_id = ? WHERE user_id = ?",
-    [actorId, userId]
-  );
-}
-
 
 export function getUserImageByID(userId) {
   return '/placeholder_profile_picture.png';
+}
+
+
+/**
+ * Search users by username, first_name, or last_name (partial match).
+ * Returns an array of user objects with: user_id, username, first_name, last_name, profile_image_url.
+ */
+export async function searchUsers(query) {
+  const db = await get_db_connection().connect();
+  const sql = `
+    SELECT user_id, username, first_name, last_name, profile_image_url
+      FROM users
+     WHERE username LIKE ?
+        OR first_name LIKE ?
+        OR last_name LIKE ?
+     LIMIT 25
+  `;
+  const params = [`%${query}%`, `%${query}%`, `%${query}%`];
+  const [rows] = await db.send_sql(sql, params);
+  return rows;
 }

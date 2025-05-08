@@ -25,21 +25,44 @@ export async function getFriendsForUser(userId) {
   return rows;  // [ { userId, firstName, lastName }, … ]
 }
 
+
+
 export async function getMutualsForUser(userId) {
-  await db.connect();
-  const [rows] = await db.send_sql(
-    `SELECT
-       u.user_id     AS userId,
-       u.first_name  AS firstName,
-       u.last_name   AS lastName
-     FROM friends f1
-     JOIN friends f2
-       ON f1.following = f2.follower
-      AND f1.follower  = f2.following
-     JOIN users u
-       ON u.user_id    = f1.following
-     WHERE f1.follower = ?`,
+  const db = get_db_connection();
+
+  // 1) Who follows you?
+  const [followers] = await db.send_sql(
+    `SELECT 
+       f.follower      AS userId,
+       u.first_name    AS firstName,
+       u.last_name     AS lastName,
+       u.username
+     FROM friends f
+     INNER JOIN users u
+       ON f.follower = u.user_id
+     WHERE f.following = ?`,
     [userId]
   );
-  return rows;
+
+  // 2) Who you follow?
+  const [following] = await db.send_sql(
+    `SELECT 
+       f.following     AS userId,
+       u.first_name    AS firstName,
+       u.last_name     AS lastName,
+       u.username
+     FROM friends f
+     INNER JOIN users u
+       ON f.following = u.user_id
+     WHERE f.follower = ?`,
+    [userId]
+  );
+
+  // 3) Deduplicate by userId
+  const map = new Map();
+  for (const u of followers) map.set(u.userId, u);
+  for (const u of following) map.set(u.userId, u);
+
+  // 4) Return an array of user objects
+  return Array.from(map.values());
 }
