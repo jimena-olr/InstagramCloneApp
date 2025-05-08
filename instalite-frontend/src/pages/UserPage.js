@@ -1,33 +1,30 @@
-// src/pages/UserPage.js
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function UserPage() {
-  const [profile, setProfile] = useState(null);
-  const [error, setError] = useState("");
+  const [profile, setProfile]   = useState(null);
+  const [error, setError]       = useState("");
   const [commentInputs, setCommentInputs] = useState({});
   const navigate = useNavigate();
 
-  // 1️⃣ load session + profile
+  /* ──────────────────────────  load session + profile  ────────────────────────── */
   useEffect(() => {
     async function fetchUserProfile() {
       try {
-        // confirm session
         const sess = await fetch("http://localhost:3030/session", {
           credentials: "include",
         });
         const { sessionUser } = await sess.json();
         if (!sessionUser) return navigate("/login");
 
-        // fetch the profile (now includes profileImageUrl)
-        const res = await fetch("http://localhost:3030/user", {
+        const res   = await fetch("http://localhost:3030/user", {
           method: "POST",
           credentials: "include",
         });
-        const data = await res.json();
+        const data  = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to load profile");
 
-        // persist avatar into localStorage
+        /* persist avatar for sidebar */
         if (data.profileImageUrl) {
           const avatar = data.profileImageUrl.startsWith("http")
             ? data.profileImageUrl
@@ -35,9 +32,7 @@ export default function UserPage() {
           localStorage.setItem("profileImageUrl", avatar);
         }
 
-        // annotate each post with `liked: false`
-        data.posts = data.posts.map((p) => ({ ...p, liked: false }));
-        setProfile(data);
+        setProfile(data);                // ← keep DB‑supplied likeCount/liked
       } catch (err) {
         console.error(err);
         setError("Could not load profile.");
@@ -46,7 +41,7 @@ export default function UserPage() {
     fetchUserProfile();
   }, [navigate]);
 
-  // 2️⃣ comment helpers
+  /* ─────────────────────────────  comment helpers  ───────────────────────────── */
   const handleCommentChange = (postId, value) =>
     setCommentInputs((prev) => ({ ...prev, [postId]: value }));
 
@@ -64,7 +59,7 @@ export default function UserPage() {
 
       setProfile((prev) => {
         const updated = { ...prev };
-        const post = updated.posts.find((x) => x.postId === postId);
+        const post    = updated.posts.find((x) => x.postId === postId);
         post.comments = [
           ...(post.comments || []),
           { username: updated.username, text: content, timestamp: new Date().toISOString() }
@@ -77,7 +72,7 @@ export default function UserPage() {
     }
   };
 
-  // 3️⃣ delete
+  /* ──────────────────────────  delete post helper  ───────────────────────────── */
   const handleDeletePost = async (postId) => {
     if (!window.confirm("Delete this post?")) return;
     try {
@@ -96,23 +91,36 @@ export default function UserPage() {
     }
   };
 
-  // 4️⃣ toggle-like
+  /* ───────────────────────────────  like toggle  ─────────────────────────────── */
   const handleToggleLike = async (postId) => {
+    // optimistic UI
     setProfile((prev) => ({
       ...prev,
-      posts: prev.posts.map((p) => {
-        if (p.postId !== postId) return p;
-        const willLike = !p.liked;
-        return { ...p, liked: willLike, likeCount: p.likeCount + (willLike ? 1 : -1) };
-      }),
+      posts: prev.posts.map((p) =>
+        p.postId === postId
+          ? { ...p, liked: !p.liked, likeCount: p.likeCount + (p.liked ? -1 : 1) }
+          : p
+      ),
     }));
 
-    const post = profile.posts.find((p) => p.postId === postId);
+    const post     = profile.posts.find((p) => p.postId === postId);
+    const method   = post.liked ? "DELETE" : "POST";
+
     try {
-      await fetch(`http://localhost:3030/post/${postId}/like`, {
-        method: post.liked ? "DELETE" : "POST",
+      const res   = await fetch(`http://localhost:3030/post/${postId}/like`, {
+        method,
         credentials: "include",
       });
+      const data  = await res.json();
+      if (!res.ok) throw new Error(data.error || "Like failed");
+
+      /* use server‑truth values */
+      setProfile((prev) => ({
+        ...prev,
+        posts: prev.posts.map((p) =>
+          p.postId === postId ? { ...p, liked: data.liked, likeCount: data.likeCount } : p
+        ),
+      }));
     } catch (err) {
       console.error("Like toggle failed:", err);
       // rollback
@@ -120,42 +128,33 @@ export default function UserPage() {
         ...prev,
         posts: prev.posts.map((p) =>
           p.postId === postId
-            ? { ...p, liked: !p.liked, likeCount: p.likeCount + (p.liked ? 1 : -1) }
+            ? { ...p, liked: post.liked, likeCount: post.likeCount }
             : p
         ),
       }));
     }
   };
 
-  if (error) return <div style={{ color: "red" }}>{error}</div>;
-  if (!profile) return <p>Loading…</p>;
+  /* ────────────────────────────────  render  ─────────────────────────────────── */
+  if (error)     return <div style={{ color: "red" }}>{error}</div>;
+  if (!profile)  return <p>Loading…</p>;
 
   const { username, followerCount, followingCount, posts } = profile;
   const myPic = localStorage.getItem("profileImageUrl") || "";
 
   return (
     <div style={{ padding: "2rem" }}>
-      {/* PROFILE HEADER */}
+      {/* Profile header */}
       <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.5rem" }}>
         {myPic ? (
-          <img
-            src={myPic}
-            alt="You"
-            style={{ width: 100, height: 100, borderRadius: "50%", objectFit: "cover" }}
-          />
+          <img src={myPic} alt="You" style={{ width: 100, height: 100, borderRadius: "50%", objectFit: "cover" }} />
         ) : (
           <div style={{ width: 100, height: 100, borderRadius: "50%", background: "#ddd" }} />
         )}
         <button
           onClick={() => navigate("/profile")}
-          style={{
-            padding: "0.6rem 1.2rem",
-            background: "#007bff",
-            color: "white",
-            border: "none",
-            borderRadius: 4,
-            cursor: "pointer",
-          }}
+          style={{ padding: ".6rem 1.2rem", background: "#007bff", color: "white",
+                   border: "none", borderRadius: 4, cursor: "pointer" }}
         >
           Change Profile Photo
         </button>
@@ -176,41 +175,22 @@ export default function UserPage() {
           : null;
 
         return (
-          <div
-            key={post.postId}
-            style={{ border: "1px solid #ccc", padding: "1rem", marginBottom: "1rem", borderRadius: "8px" }}
-          >
+          <div key={post.postId}
+               style={{ border: "1px solid #ccc", padding: "1rem", marginBottom: "1rem", borderRadius: "8px" }}>
             <p>{post.text}</p>
 
-            {/* image */}
             {imgSrc && (
-              <img
-                src={imgSrc}
-                alt="post"
-                style={{
-                  display: "block",
-                  width: "300px",
-                  height: "auto",
-                  marginTop: "0.5rem",
-                }}
-              />
+              <img src={imgSrc} alt="post"
+                   style={{ display: "block", width: "300px", height: "auto", marginTop: "0.5rem" }} />
             )}
 
-            {/* hashtags */}
             {post.hashtags.length > 0 && (
               <div style={{ marginTop: "0.5rem" }}>
                 {post.hashtags.map((tag, i) => (
-                  <span
-                    key={i}
-                    style={{
-                      display: "inline-block",
-                      backgroundColor: "#e0e0e0",
-                      borderRadius: "12px",
-                      padding: "0.2rem 0.6rem",
-                      marginRight: "0.5rem",
-                      fontSize: "0.8rem",
-                    }}
-                  >
+                  <span key={i}
+                        style={{ display: "inline-block", backgroundColor: "#e0e0e0",
+                                 borderRadius: "12px", padding: "0.2rem 0.6rem", marginRight: "0.5rem",
+                                 fontSize: "0.8rem" }}>
                     {tag.startsWith("#") ? tag : `#${tag}`}
                   </span>
                 ))}
@@ -219,9 +199,11 @@ export default function UserPage() {
 
             <small>{new Date(post.timestamp).toLocaleString()}</small>
 
-            {/* like toggle */}
+            {/* like button */}
             <div style={{ marginTop: "0.3rem", fontSize: "0.85rem" }}>
-              <button onClick={() => handleToggleLike(post.postId)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1rem", color: post.liked ? "red" : "black" }}>
+              <button onClick={() => handleToggleLike(post.postId)}
+                      style={{ background: "none", border: "none", cursor: "pointer",
+                               fontSize: "1rem", color: post.liked ? "red" : "black" }}>
                 ❤️ {post.likeCount}
               </button>
             </div>
@@ -233,27 +215,17 @@ export default function UserPage() {
               </div>
             ))}
 
-            <input
-              type="text"
-              placeholder="Write a comment…"
-              value={commentInputs[post.postId] || ""}
-              onChange={(e) => handleCommentChange(post.postId, e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && submitComment(post.postId)}
-              style={{ marginTop: "0.5rem", width: "100%", padding: "0.4rem" }}
-            />
+            <input type="text"
+                   placeholder="Write a comment…"
+                   value={commentInputs[post.postId] || ""}
+                   onChange={(e) => handleCommentChange(post.postId, e.target.value)}
+                   onKeyDown={(e) => e.key === "Enter" && submitComment(post.postId)}
+                   style={{ marginTop: "0.5rem", width: "100%", padding: "0.4rem" }} />
 
-            <button
-              onClick={() => handleDeletePost(post.postId)}
-              style={{
-                marginTop: "0.5rem",
-                backgroundColor: "#ffdddd",
-                border: "1px solid #ffaaaa",
-                color: "#aa0000",
-                padding: "0.3rem 0.6rem",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
+            <button onClick={() => handleDeletePost(post.postId)}
+                    style={{ marginTop: "0.5rem", backgroundColor: "#ffdddd",
+                             border: "1px solid #ffaaaa", color: "#aa0000",
+                             padding: "0.3rem 0.6rem", borderRadius: "4px", cursor: "pointer" }}>
               Delete Post
             </button>
           </div>
