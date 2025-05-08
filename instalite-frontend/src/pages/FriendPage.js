@@ -23,6 +23,24 @@ export default function FriendPage() {
     fetchProfile();
   }, [username]);
 
+  const handleToggleLike = async (postId, isLiked) => {
+    const method = isLiked ? "DELETE" : "POST";
+    try {
+      await fetch(`http://localhost:3030/post/${postId}/like`, {
+        method,
+        credentials: "include"
+      });
+  
+      const r = await fetch(`http://localhost:3030/user/${username}`, {
+        credentials: "include"
+      });
+      const data = await r.json();
+      setProfile(data);
+    } catch (err) {
+      console.error("Like toggle failed:", err);
+    }
+  };  
+
   if (error)    return <p style={{ color:"red" }}>{error}</p>;
   if (!profile) return <p>Loading {username}…</p>;
 
@@ -60,8 +78,21 @@ export default function FriendPage() {
                      style={{ maxWidth:"100%", marginTop:8 }}/>
               )}
               <div style={{ marginTop:4, fontSize:"0.85rem" }}>
-                ❤️ {post.likeCount || 0} likes
-              </div>
+              <button
+                onClick={() => handleToggleLike(post.postId, post.liked)}
+                style={{
+                  background: "#fff",
+                  border: "1px solid #ccc",
+                  color: post.liked ? "red" : "gray",
+                  padding: "4px 10px",
+                  borderRadius: 4,
+                  cursor: "pointer"
+                }}
+              >
+                {post.liked ? "❤️" : "🤍"} {post.likeCount || 0}
+              </button>
+            </div>
+
             </div>
           );
         })

@@ -151,20 +151,20 @@ export async function getPostsByUser(userId) {
        FROM posts p
        JOIN users u ON p.author = u.user_id
        LEFT JOIN post_likes pl ON p.post_id = pl.post_id
-       WHERE p.post_id IN (?)
+       WHERE p.author = ?
        GROUP BY p.post_id`,
-      [userId, postIds]
+      [userId, userId]
     );
 
     // If no posts, just return empty array
-    if (rows.length === 0) return [];
+    if (posts.length === 0) return [];
 
     // 2) Batch-load comments
-    const postIds = rows.map((r) => r.postId);
+    const postIds = posts.map((r) => r.postId);
     const commentsByPost = await getCommentsForPosts(postIds);
 
     // 3) Build the final JS objects
-    return orderedPosts.map((post) => ({
+    return posts.map((post) => ({
       postId: post.post_id,
       text: post.text_content,
       timestamp: post.timestamp,
