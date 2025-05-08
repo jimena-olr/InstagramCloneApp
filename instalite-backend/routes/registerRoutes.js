@@ -3,7 +3,27 @@
 /* ----------------------------------------------------------- */
 
 import multer from "multer";
-const upload = multer({ storage: multer.memoryStorage() });
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
+
+
+// point diskStorage at /<project>/uploads
+const uploadDir = path.resolve(__dirname, "..", "..", "uploads");
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    // userId‐timestamp.ext → e.g. 42-1683456789012.png
+    const ext  = path.extname(file.originalname);
+    const name = `${req.session.user.userId}-${Date.now()}${ext}`;
+    cb(null, name);
+  },
+});
+const upload = multer({ storage });
 
 /* ---- handlers re‑exported from routes.js ---- */
 import {
@@ -49,7 +69,9 @@ import {
   /* user search/follow */
   handleFollowUser,
   handleUnfollowUser,
-  handleUserSearch
+  handleUserSearch,
+  handlePostComment,
+  handleDeletePost
 } from "./routes.js";
 
 /* optional DB helper for raw queries in post upload */
@@ -113,12 +135,11 @@ export default function registerRoutes(app) {
     requireSessionAuth,
     upload.single("image"),
     async (req, res) => {
+      const user = req.session.user;
       const textContent = req.body.text_content;
-      let   hashtags;
+      let hashtags = [];
       try {
-        hashtags = req.body.hashtag_text
-          ? JSON.parse(req.body.hashtag_text)
-          : [];
+        hashtags = req.body.hashtag_text ? JSON.parse(req.body.hashtag_text) : [];
         if (!Array.isArray(hashtags)) throw new Error();
       } catch {
         return res
@@ -126,11 +147,10 @@ export default function registerRoutes(app) {
           .json({ error: "hashtag_text must be a JSON array of strings" });
       }
 
-      const user = req.session.user;
       if (!textContent || !user)
         return res.status(400).json({ error: "Missing text or session" });
 
-      const imageUrl = req.file ? req.file.originalname : null;
+       const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
       try {
         const db = get_db_connection();
@@ -150,6 +170,14 @@ export default function registerRoutes(app) {
   );
 
   /* ---------- CHAT (sessions, messages) ------------------- */
+  app.post("/post/comment", requireSessionAuth, handlePostComment);
+
+  /*app.post(
+    "/post/:postId/like",
+    requireSessionAuth,
+    handleLikePost
+  );*/
+  app.delete("/post/:postId", requireSessionAuth, handleDeletePost);
   app.post("/chat/create",       handleCreateChat);
   app.put ("/chat/:chatId/name", handleRenameChat);      // rename chat
 

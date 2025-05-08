@@ -17,6 +17,7 @@ import {
 import bcrypt from "bcrypt";
 
 import { getIO } from "../../server/chat/websocket.js";
+import { searchUsersByQuery, searchPostsByQuery } from "../../server/models/rag_helpers.js"; 
 import { get_db_connection } from "../../server/models/rdbms.js";
 
 import {
@@ -34,7 +35,7 @@ import {
 } from "../../server/chat/chat.js";
 
 import { getMutualsForUser } from "../../friends.js";
-import { getPostsByUser, getPostsForUser } from "../../posts.js";
+import { getPostsByUser, getPostsForUser, deletePost } from "../../posts.js";
 
 /* ---- chatbot helpers ---- */
 import { callChatbot } from "../../chatbot/chatbot.js";
@@ -557,4 +558,42 @@ export async function handleGetUserById(req, res) {
     firstName: u.first_name,
     lastName:  u.last_name,
   });
+}
+
+export async function handlePostComment(req, res) {
+  const userId = req.session?.user?.userId;
+  const { postId, content } = req.body;
+
+  if (!userId || !postId || !content) {
+    return res.status(400).json({ error: "Missing fields" });
+  }
+
+  try {
+    const db = get_db_connection();
+    await db.send_sql(
+      `INSERT INTO comments (post_id, user_id, text_content)
+       VALUES (?, ?, ?)`,
+      [postId, userId, content]
+    );
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    console.error("handlePostComment error:", err);
+    return res.status(500).json({ error: "Failed to submit comment" });
+  }
+}
+
+export async function handleDeletePost(req, res) {
+  const userId = req.session?.user?.userId;
+  const postId = Number(req.params.postId);
+
+  if (!userId || !postId) {
+    return res.status(400).json({ error: "Missing user or post ID" });
+  }
+
+  const result = await deletePost(postId, userId);
+  if (result.error) {
+    return res.status(403).json({ error: result.error });
+  }
+
+  return res.json({ success: true });
 }
