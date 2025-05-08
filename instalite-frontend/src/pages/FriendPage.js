@@ -89,8 +89,9 @@ export default function FriendPage() {
                   cursor: "pointer"
                 }}
               >
-                {post.liked ? "❤️" : "🤍"} {post.likeCount || 0}
+                {post.liked ? "❤️" : "🤍"}
               </button>
+              {post.likeCount || 0}
             </div>
 
             </div>

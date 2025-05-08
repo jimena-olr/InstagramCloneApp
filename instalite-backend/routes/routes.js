@@ -622,7 +622,9 @@ export async function handleGetProfileByUsername(req, res) {
     if (!user) return res.status(404).json({ error: "User not found" });
 
     /* 2️⃣—posts + follower/following counts */
-    const posts = await getPostsByUser(user.user_id);
+    const viewerId = req.session?.user?.userId;
+    const posts = await getPostsByUser(user.user_id, viewerId);
+
 
     const [[{ followerCount }]]  = await db.send_sql(
       "SELECT COUNT(*) AS followerCount  FROM friends WHERE following = ?",
@@ -732,4 +734,3 @@ export async function handleUnlikePost(req, res) {
     return res.status(500).json({ error: "Database error" });
   }
 }
-

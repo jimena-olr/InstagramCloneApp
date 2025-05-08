@@ -187,7 +187,7 @@ export default function FeedPage() {
                   style={{ background:"#fff", border:"1px solid #ccc",
                            color:post.liked ? "red" : "gray",
                            padding:"4px 10px", borderRadius:4, cursor:"pointer" }}>
-                  {post.liked ? "❤️ Unlike" : "🤍 Like"}
+                  {post.liked ? "❤️" : "🤍"}
                 </button>{" "}
                 {post.likeCount || 0} likes
               </div>

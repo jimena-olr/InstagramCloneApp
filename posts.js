@@ -128,12 +128,10 @@ function safeParseJSON(value) {
   }
   return [];
 }
-
-export async function getPostsByUser(userId) {
+export async function getPostsByUser(authorId, viewerId) {
   try {
     const db = await get_db_connection().connect();
 
-    // 1) Pull everything, aliasing columns to JS-friendly names:
     const [posts] = await db.send_sql(
       `SELECT
          p.post_id,
@@ -153,17 +151,14 @@ export async function getPostsByUser(userId) {
        LEFT JOIN post_likes pl ON p.post_id = pl.post_id
        WHERE p.author = ?
        GROUP BY p.post_id`,
-      [userId, userId]
+      [viewerId, authorId]
     );
 
-    // If no posts, just return empty array
     if (posts.length === 0) return [];
 
-    // 2) Batch-load comments
-    const postIds = posts.map((r) => r.postId);
+    const postIds = posts.map((r) => r.post_id);
     const commentsByPost = await getCommentsForPosts(postIds);
 
-    // 3) Build the final JS objects
     return posts.map((post) => ({
       postId: post.post_id,
       text: post.text_content,
@@ -181,6 +176,58 @@ export async function getPostsByUser(userId) {
     throw err;
   }
 }
+// export async function getPostsByUser(userId) {
+//   try {
+//     const db = await get_db_connection().connect();
+
+//     // 1) Pull everything, aliasing columns to JS-friendly names:
+//     const [posts] = await db.send_sql(
+//       `SELECT
+//          p.post_id,
+//          p.text_content,
+//          p.timestamp,
+//          p.image_url,
+//          p.hashtag_text,
+//          u.username AS author_username,
+//          u.profile_image_url,
+//          COUNT(pl.user_id) AS likeCount,
+//          EXISTS (
+//            SELECT 1 FROM post_likes pl2
+//            WHERE pl2.post_id = p.post_id AND pl2.user_id = ?
+//          ) AS liked
+//        FROM posts p
+//        JOIN users u ON p.author = u.user_id
+//        LEFT JOIN post_likes pl ON p.post_id = pl.post_id
+//        WHERE p.author = ?
+//        GROUP BY p.post_id`,
+//       [userId, userId]
+//     );
+
+//     // If no posts, just return empty array
+//     if (posts.length === 0) return [];
+
+//     // 2) Batch-load comments
+//     const postIds = posts.map((r) => r.postId);
+//     const commentsByPost = await getCommentsForPosts(postIds);
+
+//     // 3) Build the final JS objects
+//     return posts.map((post) => ({
+//       postId: post.post_id,
+//       text: post.text_content,
+//       timestamp: post.timestamp,
+//       imageUrl: post.image_url,
+//       author: post.author_username,
+//       profileImage: post.profile_image_url,
+//       likeCount: post.likeCount || 0,
+//       liked: Boolean(post.liked),
+//       hashtags: safeParseJSON(post.hashtag_text),
+//       comments: commentsByPost[post.post_id] || [],
+//     }));
+//   } catch (err) {
+//     console.error("getPostsByUser error:", err);
+//     throw err;
+//   }
+// }
 
 export async function getPostsForUser(userId) {
   try {
