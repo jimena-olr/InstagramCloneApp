@@ -233,14 +233,23 @@ export default function UserPage() {
           <small>{new Date(post.timestamp).toLocaleString()}</small>
 
           {/* post like */}
-          <div style={{ marginTop: 6, fontSize: "0.85rem" }}>
-            <button
-              onClick={() => handleToggleLike(post.postId)}
-              style={{ background: "none", border: "none", cursor: "pointer", color: post.liked ? "red" : "black" }}
-            >
-              ❤️ {post.likeCount}
-            </button>
-          </div>
+          <div style={{ marginTop:"0.5rem", fontSize:"0.85rem" }}>
+          <button
+            onClick={() => handleToggleLike(post.postId)}
+            style={{
+              background: "#fff",
+              border: "1px solid #ccc",
+              color: post.liked ? "red" : "gray",
+              padding: "4px 10px",
+              borderRadius: 4,
+              cursor: "pointer"
+            }}
+          >
+            {post.liked ? "❤️" : "🤍"}
+          </button>
+          {post.likeCount || 0}
+        </div>
+
 
           {/* comments with like/unlike */}
           {post.comments.map((c) => (
