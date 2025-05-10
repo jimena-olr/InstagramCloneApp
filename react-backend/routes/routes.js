@@ -223,7 +223,9 @@ export function handleLogout(req, res) {
 /* ------------------------------------------------------------------ */
 export async function handleSearch(req, res) {
   const { question } = req.body;
-  if (!question) return res.status(400).json({ error: "No question provided" });
+  if (!question || typeof question !== "string") {
+    return res.status(400).json({ error: "No question provided" });
+  }
 
   try {
     if (!retrieverInitialized) {
@@ -231,9 +233,10 @@ export async function handleSearch(req, res) {
       await ensureRetrieversReady();
       retrieverInitialized = true;
     }
-    const docs   = await retrieveRelevantDocs(question);
-    const answer = await callChatbot(question, docs);
-    return res.json({ answer });
+
+    const result = await callChatbot(question); // Only one argument
+
+    return res.json(result); // contains { answer, users, posts }
   } catch (err) {
     console.error("Chatbot error:", err);
     return res.status(500).json({ error: "Chatbot failed to process question" });

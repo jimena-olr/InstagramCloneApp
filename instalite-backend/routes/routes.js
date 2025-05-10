@@ -20,6 +20,7 @@ import { getIO } from "../../server/chat/websocket.js";
 import { searchUsersByQuery, searchPostsByQuery } from "../../server/models/rag_helpers.js"; 
 import { get_db_connection } from "../../server/models/rdbms.js";
 import { likePost, unlikePost } from "../../posts.js";
+import { createRetrieverFromDatabase } from "../../installite-backend/utils/vector.js";
 
 
 import {
@@ -224,21 +225,18 @@ export function handleLogout(req, res) {
 /*  CHATBOT SEARCH (stub)                                               */
 /* ------------------------------------------------------------------ */
 export async function handleSearch(req, res) {
-  const { question } = req.body;
-  if (!question) return res.status(400).json({ error: "No question provided" });
-
   try {
-    if (!retrieverInitialized) {
-      console.log("Initializing chatbot retrievers…");
-      await ensureRetrieversReady();
-      retrieverInitialized = true;
+    const { query } = req.body;
+
+    if (!query || typeof query !== "string") {
+      return res.status(400).json({ error: "Missing or invalid query" });
     }
-    const docs   = await retrieveRelevantDocs(question);
-    const answer = await callChatbot(question, docs);
-    return res.json({ answer });
+
+    const result = await callChatbot(query);
+    res.json(result);
   } catch (err) {
     console.error("Chatbot error:", err);
-    return res.status(500).json({ error: "Chatbot failed to process question" });
+    res.status(500).json({ error: "Chatbot failed" });
   }
 }
 

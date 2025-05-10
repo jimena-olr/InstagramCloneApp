@@ -65,7 +65,11 @@ export async function callChatbot(query) {
   const filledPrompt = await prompt.format({ context, question: query });
   const response = await model.call([{ role: "user", content: filledPrompt }]);
 
-  return response.text;
+return {
+  answer: response.text,
+  users: users,
+  posts: posts
+};
 }
 
 /* Optional: local testing only

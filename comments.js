@@ -141,23 +141,23 @@ export async function deleteComment(commentId, userId) {
 //   return commentsByPost;
 // }
 
-export async function getCommentsForPosts(postIds, viewerId) {
+export async function getCommentsForPosts(postIds = [], viewerId) {
   if (!postIds.length) return {};
-  const db = get_db_connection();
+
   const [rows] = await db.send_sql(
     `
     SELECT
       c.comment_id,
       c.post_id,
       u.username,
-      c.text_content AS text,
+      c.text_content   AS text,
       c.timestamp,
       COUNT(cl.user_id) AS likeCount,
-      EXISTS(
+      EXISTS (
         SELECT 1
           FROM comment_likes cl2
          WHERE cl2.comment_id = c.comment_id
-           AND cl2.user_id = ?
+           AND cl2.user_id    = ?
       ) AS liked
     FROM comments c
     JOIN users u

@@ -39,7 +39,7 @@ export default function SearchPage() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ query: question }),
       });
 
       const data = await res.json();
