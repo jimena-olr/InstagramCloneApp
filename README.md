@@ -1,5 +1,4 @@
 ## Instagram Clone App
 
-
-https://github.com/user-attachments/assets/b0df2bd6-3e7f-48b6-8ab4-7771e2a89fa2
+https://github.com/user-attachments/assets/03a47c9c-1ade-4886-b798-76a501746bbe
 
