@@ -1,13 +1,18 @@
 # 📱 Instagram Clone App
-SightSeek is an Android application designed for tourists that allows them to see the principal historical landmarks in several cities around the world, such as Paris, Lisboa, and Washington.
 
-The following software is designed with Ionic Framework, based on AngularJS and Capacitor, and designed with TypeScript and JavaScript as the main programming languages. This is an Android targeted application that was built through Android Studio, with a Gradle engine. As the main functions of this project, Sightseek can:
+**InstaLite** is a full-stack Instagram-like web application that supports user-generated posts, real-time updates, personalized content feeds, actor-matching profile photos, and a Retrieval-Augmented Generation (RAG) chatbot for semantic search.
 
-- Take the user's location and display it leveraging the Google Maps API
-- Use the Compass feature in the user's phone and rotate a dynamic compass to help the user orient themselves
-- Select a city out of a menu and display the corresponding map for the user, having Washington, Rome, Paris, and Lisboa as some of the possible options (all of these are displayed in the video below)
-- Display the principal historical landmarks in the city that has been chosen by the user, using color coding with a menu layout for the user to know which one is closest to their location.
-- Share the user's location to any person in their contacts for security reasons.
+This application was built using React for the frontend, Node.js and Express for the backend, and MySQL on AWS RDS for data persistence. Additional infrastructure includes Kafka for federated post streaming, Apache Spark for feed ranking, and ChromaDB for vector-based retrieval.
+
+Key platform features include:
+
+- User registration, authentication, and profile photo selection via face-matching  
+- Post creation with captions, images, hashtags, and comments  
+- Personalized feed ranking using the Adsorption algorithm over a social graph  
+- Real-time updates via Kafka topics, including federated post ingestion  
+- Vector-based chatbot for natural language search across platform and movie data  
+
+The chatbot leverages a Retrieval-Augmented Generation (RAG) framework using LangChain and ChromaDB, combined with OpenAI’s language models. During each user query, the system retrieves semantically similar content across three collections: actor biographies, movie metadata, and platform posts and users, using vector similarity. These documents are then passed to OpenAI's GPT model via API to generate a natural language response. We used secure environment variables to store and access our OpenAI API keys, and designed the embedding workflow to differentiate between static (IMDB, Kaggle) and dynamic (live post and user) content. This ensures that chatbot responses are grounded in both persistent and real-time data, offering a seamless discovery experience across the application.
 
 A demo of the following project can be seen below:
 
