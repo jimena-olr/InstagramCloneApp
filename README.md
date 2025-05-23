@@ -14,8 +14,8 @@ A demo of the following project can be seen below:
 https://github.com/user-attachments/assets/03a47c9c-1ade-4886-b798-76a501746bbe
 
 The source code for the Retrieval-Augmented generation chatbot can be found in the following relevant files:
-- chatbot/chatbot.js as a caller function to the chatbot, which is triggered from the frontend
-- chatbot/embed.js to create the vector embeddings from the Kaggle and IMDB databases
-- installite-backend/utils/vector.js to load the langchain retrievers from ChromaDB
+- (chatbot/chatbot.js) as a caller function to the chatbot, which is triggered from the frontend
+- (chatbot/embed.js) to create the vector embeddings from the Kaggle and IMDB databases
+- (installite-backend/utils/vector.js) to load the langchain retrievers from ChromaDB
 
 *While the RAG chatbot is my own personal work, the full Instagram Clone App was developed with the collaboration of my classmates Faiyaz Hasan, Shreya Mukunthan and Stefan Matic.
